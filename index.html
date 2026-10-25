@@ -275,6 +275,8 @@ div.privacy.small{max-height:30vh;padding:12px;border-radius:12px;background:var
 <script>
 // Indirizzo dell'app web Google (Apps Script) che riceve i risultati. Vuoto = nessun invio.
 const SHEET_URL="https://script.google.com/macros/s/AKfycbxyVO8NDKZ04OrbNQr931iOfh8LofcdpwBFsKCINMjKultVmi2z7MVYDj5tDvOG9RBRyg/exec";
+// Indirizzo del sito ufficiale (GitHub Pages). Da qui la classifica generale funziona; altrove si mostra un rimando.
+const SITE_URL="https://egmottola-del.github.io/simulatore-semestre-filtro/";
 
 const BANK=[];
 // BIOLOGIA — bilanciamento delle unità (u1, u2, u3, u6, u7) — domande originali
@@ -2795,13 +2797,13 @@ function whoCreate(){const i=$("#who-n");const n=(i&&i.value||"").trim().replace
   const ok=!!($("#who-ok")&&$("#who-ok").checked);const c=newCode();P.pr[c]={n,t:Date.now(),ok};setMe(c);save();view.who.step="code";view.who.code=c;renderWho();}
 function whoHTML(){const w=view.who;if(!w)return "";const S=w.s?esc(SUBJ[w.s].name)+(w.next==="examHard"?" · difficile":""):"";let b;
   if(w.step==="confirm"){const p=P.pr[ME];b=`<p>Stai per iniziare la simulazione come:</p><div class="who-me"><b>${esc(p.n)}</b><span class="code">${esc(ME)}</span></div>
-    ${SHEET_URL?`<label class="consent"><input type="checkbox" data-act="whoConsent" ${p.ok?"checked":""}><span>Invia i miei risultati all'associazione ALFARMA e partecipa alla graduatoria generale (<button class="linkish" data-act="whoPrivacy">informativa</button>)</span></label>`:""}
+    ${ONLINE?`<label class="consent"><input type="checkbox" data-act="whoConsent" ${p.ok?"checked":""}><span>Invia i miei risultati all'associazione ALFARMA e partecipa alla graduatoria generale (<button class="linkish" data-act="whoPrivacy">informativa</button>)</span></label>`:""}
     <div class="row"><button class="btn primary" data-act="whoGo">Sì, inizia</button><button class="btn" data-act="whoOther">Sono un'altra persona</button></div>`;}
   else if(w.step==="pick"){b=`<p>Chi sta facendo la simulazione?</p><div class="who-list">${Object.keys(P.pr).sort((x,y)=>P.pr[y].t-P.pr[x].t).map(c=>`<button class="btn who-opt" data-act="whoPick" data-code="${esc(c)}"><b>${esc(P.pr[c].n)}</b><span class="code">${esc(c)}</span></button>`).join("")}</div>
     <div class="row"><button class="btn primary" data-act="whoNew">Sono una persona nuova</button></div>`;}
   else if(w.step==="privacy"){return `<div class="overlay" data-act="whoClose"><div class="dialog stack privacy" role="dialog" aria-modal="true" aria-labelledby="who-h"><div class="row" style="justify-content:space-between"><h3 id="who-h">Informativa privacy</h3><button class="btn ghost small" data-act="whoClose" aria-label="Chiudi">✕</button></div>${PRIVACY}<div class="row"><button class="btn primary" data-act="whoClose">Ho capito</button></div></div></div>`;}
   else if(w.step==="new"){b=`<label class="field">Come ti chiami?<input id="who-n" type="text" autocomplete="name" maxlength="40" placeholder="Nome e cognome"></label>
-    ${SHEET_URL?`<label class="consent"><input type="checkbox" id="who-ok"><span>Acconsento all'invio di nome, codice e risultati delle simulazioni all'associazione ALFARMA, come descritto nell'<button class="linkish" data-act="whoInfo">informativa privacy</button>. Facoltativo: senza consenso il simulatore funziona lo stesso.</span></label>
+    ${ONLINE?`<label class="consent"><input type="checkbox" id="who-ok"><span>Acconsento all'invio di nome, codice e risultati delle simulazioni all'associazione ALFARMA, come descritto nell'<button class="linkish" data-act="whoInfo">informativa privacy</button>. Facoltativo: senza consenso il simulatore funziona lo stesso.</span></label>
     ${w.info?`<div class="privacy small">${PRIVACY}</div>`:""}
     <p class="muted small">Ti assegneremo un codice personale: in graduatoria compare solo quello, mai il nome.</p>`:`<p class="muted small">Il nome resta solo su questo dispositivo. Ti assegneremo un codice personale: in graduatoria compare solo quello.</p>`}
     <div class="row"><button class="btn primary" data-act="whoCreate">Crea il mio codice</button></div>`;}
@@ -2817,27 +2819,30 @@ function board(s){const g={};P.attempts.forEach(a=>{if(a.s!==s||a.mode!=="exam"|
   return Object.values(g).sort((x,y)=>y.best-x.best||y.sum/y.n-x.sum/x.n||x.last-y.last);}
 /* ------------------------------------------------------------------ INVIO DEI RISULTATI ALL'ASSOCIAZIONE */
 const QKEY="sf-sim-queue-v1";
+const ONLINE=!!SHEET_URL&&(location.hostname.endsWith("github.io")||(SITE_URL&&location.href.startsWith(SITE_URL))||["localhost","127.0.0.1",""].includes(location.hostname));
 const PRIVACY=`<p><b>Chi tratta i dati.</b> L'associazione studentesca ALFARMA (Università della Calabria), contattabile su Instagram <a href="https://www.instagram.com/alfarmaunical/" target="_blank" rel="noopener">@alfarmaunical</a> o ai numeri indicati in fondo alla pagina.</p>
 <p><b>Quali dati.</b> Solo se dai il consenso: il nome che inserisci, il tuo codice personale e i risultati delle simulazioni d'esame (materia, data, durata, punteggio, risposte esatte, errate e omesse, argomenti da rivedere). Le esercitazioni non vengono inviate.</p>
 <p><b>Perché.</b> Per la graduatoria generale, dove compare soltanto il codice e mai il nome, e per permettere all'associazione di seguire l'andamento degli studenti e organizzare attività di ripasso sugli argomenti più difficili.</p>
 <p><b>Base giuridica.</b> Il tuo consenso (art. 6, par. 1, lett. a del Regolamento UE 2016/679). È facoltativo: senza consenso il simulatore funziona allo stesso modo e i tuoi dati restano solo su questo dispositivo.</p>
 <p><b>Dove e per quanto.</b> In un foglio di calcolo Google dell'associazione, accessibile solo ai suoi referenti. I dati sono cancellati entro il 31 marzo 2027.</p>
 <p><b>I tuoi diritti.</b> Puoi revocare il consenso in ogni momento dalla finestra che compare prima di ogni simulazione; per vedere, correggere o cancellare i dati già inviati scrivi all'associazione indicando il tuo codice. Puoi anche presentare reclamo al Garante per la protezione dei dati personali.</p>`;
-function enqueue(a,ex){if(!SHEET_URL||!a.pid)return;const p=P.pr[a.pid];if(!p||!p.ok)return;
+function enqueue(a,ex){if(!ONLINE||!a.pid)return;const p=P.pr[a.pid];if(!p||!p.ok)return;
   const weak=[];ex.items.forEach(it=>{if(it.ok!==true){const n=TP[QI[it.id].tp].n;if(!weak.includes(n))weak.push(n);}});
   const Q=lsGet(QKEY)||[];Q.push({id:a.id,code:a.pid,name:p.n,s:a.s,hard:a.hard,date:a.date,score:a.score,correct:a.correct,wrong:a.wrong,omitted:a.omitted,dur:a.dur,weak});lsSet(QKEY,Q.slice(-50));flush();}
 let flushing=false;
-async function flush(){if(!SHEET_URL||flushing)return;flushing=true;try{let Q=lsGet(QKEY)||[];
+async function flush(){if(!ONLINE||flushing)return;flushing=true;try{let Q=lsGet(QKEY)||[];
   while(Q.length){const r=Q[0];try{await fetch(SHEET_URL,{method:"POST",mode:"no-cors",headers:{"Content-Type":"text/plain;charset=utf-8"},body:JSON.stringify(r)});}catch(e){break;}
     Q=(lsGet(QKEY)||[]).filter(x=>x.id!==r.id);lsSet(QKEY,Q);GBT=0;}}finally{flushing=false;}}
 let GB=null,GBT=0,GBERR=false;
-function loadGB(){if(!SHEET_URL||Date.now()-GBT<30000)return;GBT=Date.now();
+function loadGB(){if(!ONLINE||Date.now()-GBT<30000)return;GBT=Date.now();
   fetch(SHEET_URL+"?lb=1").then(r=>r.json()).then(j=>{GB=j;GBERR=false;if(view.name==="home"&&!view.who)render();}).catch(()=>{GBERR=true;if(view.name==="home"&&!view.who)render();});}
-function boardHTML(){const s=view.lb||"chem";const all=!!SHEET_URL&&view.lbScope!=="dev";
+function boardHTML(){const s=view.lb||"chem";const all=!!ONLINE&&view.lbScope!=="dev";
   const rows=all?((GB&&GB[s])||[]):board(s).map(r=>({code:r.code,best:r.best,avg:Math.round(r.sum/r.n*100)/100,n:r.n,pass:r.pass}));
   let h=`<section class="panel stack lb ${SUBJ[s].cls}"><div class="row" style="justify-content:space-between"><div><h2>Graduatoria</h2><p class="muted small" style="margin:0">${all?"Miglior punteggio di tutti gli studenti nelle simulazioni d'esame.":"Miglior punteggio nelle simulazioni d'esame fatte su questo dispositivo."} Al posto dei nomi compare il codice personale.</p></div>
-    <div class="stack" style="gap:8px;justify-items:end">${SHEET_URL?`<div class="seg" role="group" aria-label="Chi"><button data-act="lbScope" data-v="all" aria-pressed="${all}">Tutti</button><button data-act="lbScope" data-v="dev" aria-pressed="${!all}">Questo dispositivo</button></div>`:""}
+    <div class="stack" style="gap:8px;justify-items:end">${ONLINE?`<div class="seg" role="group" aria-label="Chi"><button data-act="lbScope" data-v="all" aria-pressed="${all}">Tutti</button><button data-act="lbScope" data-v="dev" aria-pressed="${!all}">Questo dispositivo</button></div>`:""}
     <div class="seg" role="group" aria-label="Materia">${ORDER.map(x=>`<button data-act="lb" data-s="${x}" aria-pressed="${x===s}">${esc(sname(x))}</button>`).join("")}</div></div></div>`;
+  const siteNote=(!ONLINE&&SITE_URL)?`<p class="muted small" style="margin:0">La graduatoria di <b>tutti gli studenti</b> è sul sito ufficiale: <a href="${SITE_URL}" target="_blank" rel="noopener">${esc(SITE_URL.replace(/^https?:\/\//,"").replace(/\/$/,""))}</a>. Le simulazioni fatte lì vengono inviate all'associazione e contano per la classifica.</p>`:"";
+  h+=siteNote;
   if(all&&!GB)return h+`<p class="muted">${GBERR?"Classifica generale non raggiungibile in questo momento. Riprova più tardi o guarda quella di questo dispositivo.":"Caricamento della classifica…"}</p></section>`;
   if(!rows.length)return h+`<p class="muted">Ancora nessuna simulazione di ${esc(SUBJ[s].name)}. Fai la prima: al primo avvio ti verrà chiesto il nome e assegnato un codice.</p></section>`;
   h+=`<div class="tbl-wrap"><table class="hist lb-t"><thead><tr><th>#</th><th>Codice</th><th>Migliore</th><th>Media</th><th>Prove</th><th>Superate</th></tr></thead><tbody>`;
@@ -3016,7 +3021,7 @@ function homeHTML(){
   <p>Simulatore realizzato a cura dell'associazione studentesca ALFARMA per chi affronta il semestre filtro.</p>
   <p><b>Instagram:</b> <a href="https://www.instagram.com/alfarmaunical/" target="_blank" rel="noopener">@alfarmaunical</a></p>
   <p><b>Dove trovarci:</b> al Polifunzionale dell'UNICAL, di fronte al Poli Bistrot. <a class="maplink" href="https://www.google.com/maps/search/?api=1&amp;query=Alfarma%20-%20Associazione%20Studentesca&amp;query_place_id=ChIJv1rvz5WZPxMR6It4faIMo28" target="_blank" rel="noopener"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M12 2a7 7 0 0 0-7 7c0 5.2 7 13 7 13s7-7.8 7-13a7 7 0 0 0-7-7zm0 9.5A2.5 2.5 0 1 1 12 6.5a2.5 2.5 0 0 1 0 5z"/></svg>Apri in Google Maps</a></p>
-  ${SHEET_URL?`<p><button class="linkish" data-act="privacy">Informativa privacy</button></p>`:""}
+  ${ONLINE?`<p><button class="linkish" data-act="privacy">Informativa privacy</button></p>`:""}
   <p><b>Contatti:</b> Ettore <a href="tel:+393249855554">324 985 5554</a> · Letizia <a href="tel:+393349868686">334 986 8686</a></p></div><p>Le domande sono originali, scritte sui syllabus ministeriali e tarate sugli appelli 2025/26 e sugli eserciziari più usati: non sono domande ufficiali né copiate dai libri. Affianca sempre le simulazioni del Ministero e degli atenei.</p><p>Formato e punteggi secondo il decreto per l'a.a. 2026/27 (21 multipla + 10 completamento, 50 minuti, −0,1 per risposta errata).</p></footer>
   </div>`;
   return h;}
