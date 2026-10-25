@@ -1,0 +1,501 @@
+<title>Simulatore Semestre Filtro</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Quicksand:wght@500;600;700&family=Figtree:ital,wght@0,400;0,600;0,700;1,400&family=JetBrains+Mono:wght@500;700&display=swap">
+<style>/*__STYLE__*/</style>
+
+<div id="app"></div>
+
+<script>
+/*__CONFIG__*/
+const BANK=[];
+/*__BANK__*/
+/*__TOPICS__*/
+</script>
+<script>
+(function(){
+"use strict";
+/* ------------------------------------------------------------------ config */
+const EXAM={mc:21,fill:10,minutes:50,right:1,wrong:-0.1,pass:18,max:31};
+const SUBJ={
+  bio:{name:"Biologia",cls:"chip-bio",units:{1:"Basi dell'organizzazione biologica",2:"Genoma, cromatina e cromosomi",3:"Flusso dell'informazione genetica",4:"Mutazioni ed ereditarietà",5:"Strutture cellulari e trasporti",6:"Matrice, giunzioni e segnalazione",7:"Ciclo cellulare, meiosi e morte cellulare"}},
+  chem:{name:"Chimica e Propedeutica Biochimica",short:"Chimica",cls:"chip-chem",units:{1:"Atomo, tavola periodica e legami",2:"Stati della materia e termodinamica",3:"Soluzioni e proprietà colligative",4:"Reazioni, cinetica ed equilibrio",5:"Acidi, basi, tamponi ed elettrochimica",6:"Idrocarburi e reattività organica",7:"Gruppi funzionali e isomeria",8:"Biomolecole"}},
+  fis:{name:"Fisica",cls:"chip-fis",units:{1:"Metodi, unità di misura e vettori",2:"Meccanica",3:"Meccanica dei fluidi",4:"Onde meccaniche e acustica",5:"Termodinamica",6:"Elettricità e magnetismo",7:"Radiazioni elettromagnetiche e ottica"}}
+};
+const ORDER=["chem","fis","bio"];
+const ICON={
+ bio:'<svg viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" aria-hidden="true"><path d="M20 6c0 13 24 13 24 26S20 45 20 58"/><path d="M44 6c0 13-24 13-24 26s24 13 24 26"/><path d="M24 12h16M22 20h20M24 44h16M22 52h20" stroke-width="2.4" opacity=".75"/></svg>',
+ chem:'<svg viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linejoin="round" stroke-linecap="round" aria-hidden="true"><path d="M25 6h14M27 6v18L12 52a4 4 0 0 0 3.6 6h32.8a4 4 0 0 0 3.6-6L37 24V6"/><path d="M18 42h28" stroke-width="2.4"/><circle cx="28" cy="49" r="2.4" fill="currentColor" stroke="none"/><circle cx="37" cy="51" r="1.8" fill="currentColor" stroke="none"/></svg>',
+ fis:'<svg viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="3" aria-hidden="true"><ellipse cx="32" cy="32" rx="27" ry="10"/><ellipse cx="32" cy="32" rx="27" ry="10" transform="rotate(60 32 32)"/><ellipse cx="32" cy="32" rx="27" ry="10" transform="rotate(120 32 32)"/><circle cx="32" cy="32" r="4.5" fill="currentColor" stroke="none"/></svg>'};
+const sname=s=>SUBJ[s].short||SUBJ[s].name;
+const BY={bio:[],chem:[],fis:[]};const QI={};
+BANK.forEach(q=>{q.t=q.c?"fill":"mc";BY[q.s].push(q);QI[q.id]=q;});
+/* sotto-argomenti: ogni domanda viene associata all'argomento le cui parole chiave compaiono di più */
+const TP={};
+Object.keys(TOPICS).forEach(s=>Object.keys(TOPICS[s]).forEach(u=>TOPICS[s][u].forEach(t=>{t.s=s;t.u=+u;t.g=new RegExp(t.re.source,"gi");TP[t.id]=t;})));
+function classify(q){const L=(TOPICS[q.s]||{})[q.u]||[];const main=q.q+" "+(q.c?q.c[0]:q.o[0]),ex=q.e||"";let best=null,bs=0;
+  L.forEach(t=>{const sc=2*(main.match(t.g)||[]).length+(ex.match(t.g)||[]).length;if(sc>bs){bs=sc;best=t;}});
+  if(best)return best.id;
+  const gid=q.s+q.u+"_g";if(!TP[gid])TP[gid]={id:gid,s:q.s,u:+q.u,n:"Altri concetti di "+SUBJ[q.s].units[q.u].toLowerCase(),t:"conc",r:["Rileggi la spiegazione di ogni domanda sbagliata qui sotto","Ritrova il paragrafo corrispondente sul libro e rifai le domande dell'unità"]};
+  return gid;}
+BANK.forEach(q=>{q.tp=classify(q);});
+
+/* ------------------------------------------------------------------ storage */
+const LKEY="sf-sim-v1",DKEY="sf-sim-draft-v1";
+let P={attempts:[],qs:{},v:1};      // progress
+let db=null,uid=null,cloud=false,saveTimer=null;
+function lsGet(k){try{const r=localStorage.getItem(k);return r?JSON.parse(r):null}catch(e){return null}}
+function lsSet(k,v){try{if(v===null)localStorage.removeItem(k);else localStorage.setItem(k,JSON.stringify(v))}catch(e){}}
+function mergeP(a,b){ // union of attempts by id; qs: keep max seen
+  const out={attempts:[],qs:{},v:1};const seen=new Set();
+  [...(a.attempts||[]),...(b.attempts||[])].forEach(x=>{if(x&&!seen.has(x.id)){seen.add(x.id);out.attempts.push(x)}});
+  out.attempts.sort((x,y)=>x.date-y.date);out.attempts=out.attempts.slice(-300);
+  out.pr=Object.assign({},b.pr||{},a.pr||{});
+  const keys=new Set([...Object.keys(a.qs||{}),...Object.keys(b.qs||{})]);
+  keys.forEach(k=>{const x=(a.qs||{})[k]||[0,0,0,0],y=(b.qs||{})[k]||[0,0,0,0];
+    out.qs[k]=(x[0]>=y[0])?x:y;});
+  return out;
+}
+const local=lsGet(LKEY);if(local&&local.attempts)P=mergeP(P,local);P.pr=P.pr||{};
+
+/* ------------------------------------------------------------------ PROFILI E CODICI */
+// il nome resta solo su questo dispositivo; in graduatoria compare soltanto il codice
+const CKEY="sf-sim-me-v1";let ME=lsGet(CKEY);
+function setMe(c){ME=c;lsSet(CKEY,c);}
+function newCode(){const A="ACDEFHJKLMNPRTUVWXY3479";let c;do{c="AF-";for(let i=0;i<4;i++)c+=A[Math.floor(Math.random()*A.length)];}while(P.pr[c]);return c;}
+function whoCreate(){const i=$("#who-n");const n=(i&&i.value||"").trim().replace(/\s+/g," ").slice(0,40);if(!n){if(i){i.focus();i.classList.add("bad");}return;}
+  const ok=!!($("#who-ok")&&$("#who-ok").checked);const c=newCode();P.pr[c]={n,t:Date.now(),ok};setMe(c);save();view.who.step="code";view.who.code=c;renderWho();}
+function whoHTML(){const w=view.who;if(!w)return "";const S=w.s?esc(SUBJ[w.s].name)+(w.next==="examHard"?" · difficile":""):"";let b;
+  if(w.step==="confirm"){const p=P.pr[ME];b=`<p>Stai per iniziare la simulazione come:</p><div class="who-me"><b>${esc(p.n)}</b><span class="code">${esc(ME)}</span></div>
+    ${SHEET_URL?`<label class="consent"><input type="checkbox" data-act="whoConsent" ${p.ok?"checked":""}><span>Invia i miei risultati all'associazione ALFARMA e partecipa alla graduatoria generale (<button class="linkish" data-act="whoPrivacy">informativa</button>)</span></label>`:""}
+    <div class="row"><button class="btn primary" data-act="whoGo">Sì, inizia</button><button class="btn" data-act="whoOther">Sono un'altra persona</button></div>`;}
+  else if(w.step==="pick"){b=`<p>Chi sta facendo la simulazione?</p><div class="who-list">${Object.keys(P.pr).sort((x,y)=>P.pr[y].t-P.pr[x].t).map(c=>`<button class="btn who-opt" data-act="whoPick" data-code="${esc(c)}"><b>${esc(P.pr[c].n)}</b><span class="code">${esc(c)}</span></button>`).join("")}</div>
+    <div class="row"><button class="btn primary" data-act="whoNew">Sono una persona nuova</button></div>`;}
+  else if(w.step==="privacy"){return `<div class="overlay" data-act="whoClose"><div class="dialog stack privacy" role="dialog" aria-modal="true" aria-labelledby="who-h"><div class="row" style="justify-content:space-between"><h3 id="who-h">Informativa privacy</h3><button class="btn ghost small" data-act="whoClose" aria-label="Chiudi">✕</button></div>${PRIVACY}<div class="row"><button class="btn primary" data-act="whoClose">Ho capito</button></div></div></div>`;}
+  else if(w.step==="new"){b=`<label class="field">Come ti chiami?<input id="who-n" type="text" autocomplete="name" maxlength="40" placeholder="Nome e cognome"></label>
+    ${SHEET_URL?`<label class="consent"><input type="checkbox" id="who-ok"><span>Acconsento all'invio di nome, codice e risultati delle simulazioni all'associazione ALFARMA, come descritto nell'<button class="linkish" data-act="whoInfo">informativa privacy</button>. Facoltativo: senza consenso il simulatore funziona lo stesso.</span></label>
+    ${w.info?`<div class="privacy small">${PRIVACY}</div>`:""}
+    <p class="muted small">Ti assegneremo un codice personale: in graduatoria compare solo quello, mai il nome.</p>`:`<p class="muted small">Il nome resta solo su questo dispositivo. Ti assegneremo un codice personale: in graduatoria compare solo quello.</p>`}
+    <div class="row"><button class="btn primary" data-act="whoCreate">Crea il mio codice</button></div>`;}
+  else b=`<p>Ciao <b>${esc(P.pr[w.code].n)}</b>, questo è il tuo codice personale:</p><div class="code big">${esc(w.code)}</div>
+    <p class="muted small">Annotalo: in graduatoria vedrai i tuoi punteggi accanto a questo codice.</p><div class="row"><button class="btn primary" data-act="whoGo">Inizia la simulazione</button></div>`;
+  return `<div class="overlay" data-act="whoClose"><div class="dialog stack" role="dialog" aria-modal="true" aria-labelledby="who-h"><div class="row" style="justify-content:space-between"><div><p class="eyebrow">${S}</p><h3 id="who-h">Prima di iniziare</h3></div><button class="btn ghost small" data-act="whoClose" aria-label="Chiudi">✕</button></div>${b}</div></div>`;}
+function renderWho(){let el=document.getElementById("who-root");if(!el){el=document.createElement("div");el.id="who-root";document.body.appendChild(el);}
+  const keep={n:$("#who-n")&&$("#who-n").value,ok:$("#who-ok")&&$("#who-ok").checked};el.innerHTML=whoHTML();
+  const i=$("#who-n");if(i){if(keep.n)i.value=keep.n;i.focus();}const c=$("#who-ok");if(c&&keep.ok)c.checked=true;if(!view.who&&view.name==="home")render();}
+
+/* ------------------------------------------------------------------ GRADUATORIA */
+function board(s){const g={};P.attempts.forEach(a=>{if(a.s!==s||a.mode!=="exam"||!a.pid)return;const r=g[a.pid]=g[a.pid]||{code:a.pid,best:-99,sum:0,n:0,pass:0,last:0};r.best=Math.max(r.best,a.score);r.sum+=a.score;r.n++;if(a.score>=EXAM.pass)r.pass++;r.last=Math.max(r.last,a.date);});
+  return Object.values(g).sort((x,y)=>y.best-x.best||y.sum/y.n-x.sum/x.n||x.last-y.last);}
+/* ------------------------------------------------------------------ INVIO DEI RISULTATI ALL'ASSOCIAZIONE */
+const QKEY="sf-sim-queue-v1";
+const PRIVACY=`<p><b>Chi tratta i dati.</b> L'associazione studentesca ALFARMA (Università della Calabria), contattabile su Instagram <a href="https://www.instagram.com/alfarmaunical/" target="_blank" rel="noopener">@alfarmaunical</a> o ai numeri indicati in fondo alla pagina.</p>
+<p><b>Quali dati.</b> Solo se dai il consenso: il nome che inserisci, il tuo codice personale e i risultati delle simulazioni d'esame (materia, data, durata, punteggio, risposte esatte, errate e omesse, argomenti da rivedere). Le esercitazioni non vengono inviate.</p>
+<p><b>Perché.</b> Per la graduatoria generale, dove compare soltanto il codice e mai il nome, e per permettere all'associazione di seguire l'andamento degli studenti e organizzare attività di ripasso sugli argomenti più difficili.</p>
+<p><b>Base giuridica.</b> Il tuo consenso (art. 6, par. 1, lett. a del Regolamento UE 2016/679). È facoltativo: senza consenso il simulatore funziona allo stesso modo e i tuoi dati restano solo su questo dispositivo.</p>
+<p><b>Dove e per quanto.</b> In un foglio di calcolo Google dell'associazione, accessibile solo ai suoi referenti. I dati sono cancellati entro il 31 marzo 2027.</p>
+<p><b>I tuoi diritti.</b> Puoi revocare il consenso in ogni momento dalla finestra che compare prima di ogni simulazione; per vedere, correggere o cancellare i dati già inviati scrivi all'associazione indicando il tuo codice. Puoi anche presentare reclamo al Garante per la protezione dei dati personali.</p>`;
+function enqueue(a,ex){if(!SHEET_URL||!a.pid)return;const p=P.pr[a.pid];if(!p||!p.ok)return;
+  const weak=[];ex.items.forEach(it=>{if(it.ok!==true){const n=TP[QI[it.id].tp].n;if(!weak.includes(n))weak.push(n);}});
+  const Q=lsGet(QKEY)||[];Q.push({id:a.id,code:a.pid,name:p.n,s:a.s,hard:a.hard,date:a.date,score:a.score,correct:a.correct,wrong:a.wrong,omitted:a.omitted,dur:a.dur,weak});lsSet(QKEY,Q.slice(-50));flush();}
+let flushing=false;
+async function flush(){if(!SHEET_URL||flushing)return;flushing=true;try{let Q=lsGet(QKEY)||[];
+  while(Q.length){const r=Q[0];try{await fetch(SHEET_URL,{method:"POST",mode:"no-cors",headers:{"Content-Type":"text/plain;charset=utf-8"},body:JSON.stringify(r)});}catch(e){break;}
+    Q=(lsGet(QKEY)||[]).filter(x=>x.id!==r.id);lsSet(QKEY,Q);GBT=0;}}finally{flushing=false;}}
+let GB=null,GBT=0,GBERR=false;
+function loadGB(){if(!SHEET_URL||Date.now()-GBT<30000)return;GBT=Date.now();
+  fetch(SHEET_URL+"?lb=1").then(r=>r.json()).then(j=>{GB=j;GBERR=false;if(view.name==="home"&&!view.who)render();}).catch(()=>{GBERR=true;if(view.name==="home"&&!view.who)render();});}
+function boardHTML(){const s=view.lb||"chem";const all=!!SHEET_URL&&view.lbScope!=="dev";
+  const rows=all?((GB&&GB[s])||[]):board(s).map(r=>({code:r.code,best:r.best,avg:Math.round(r.sum/r.n*100)/100,n:r.n,pass:r.pass}));
+  let h=`<section class="panel stack lb ${SUBJ[s].cls}"><div class="row" style="justify-content:space-between"><div><h2>Graduatoria</h2><p class="muted small" style="margin:0">${all?"Miglior punteggio di tutti gli studenti nelle simulazioni d'esame.":"Miglior punteggio nelle simulazioni d'esame fatte su questo dispositivo."} Al posto dei nomi compare il codice personale.</p></div>
+    <div class="stack" style="gap:8px;justify-items:end">${SHEET_URL?`<div class="seg" role="group" aria-label="Chi"><button data-act="lbScope" data-v="all" aria-pressed="${all}">Tutti</button><button data-act="lbScope" data-v="dev" aria-pressed="${!all}">Questo dispositivo</button></div>`:""}
+    <div class="seg" role="group" aria-label="Materia">${ORDER.map(x=>`<button data-act="lb" data-s="${x}" aria-pressed="${x===s}">${esc(sname(x))}</button>`).join("")}</div></div></div>`;
+  if(all&&!GB)return h+`<p class="muted">${GBERR?"Classifica generale non raggiungibile in questo momento. Riprova più tardi o guarda quella di questo dispositivo.":"Caricamento della classifica…"}</p></section>`;
+  if(!rows.length)return h+`<p class="muted">Ancora nessuna simulazione di ${esc(SUBJ[s].name)}. Fai la prima: al primo avvio ti verrà chiesto il nome e assegnato un codice.</p></section>`;
+  h+=`<div class="tbl-wrap"><table class="hist lb-t"><thead><tr><th>#</th><th>Codice</th><th>Migliore</th><th>Media</th><th>Prove</th><th>Superate</th></tr></thead><tbody>`;
+  rows.forEach((r,i)=>{h+=`<tr class="${r.code===ME?"me":""}"><td><span class="pos p${i+1}">${i+1}</span></td><td class="mono"><b>${esc(r.code)}</b>${r.code===ME?` <span class="pill neutral">tu</span>`:""}</td><td class="mono"><b>${fmt(r.best)}</b>/31</td><td class="mono">${fmt(r.avg)}</td><td class="mono">${r.n}</td><td class="mono">${r.pass}/${r.n}</td></tr>`;});
+  return h+`</tbody></table></div></section>`;}
+function save(){lsSet(LKEY,P);if(!cloud)return;clearTimeout(saveTimer);saveTimer=setTimeout(async()=>{
+  try{await db.doc("data/users/"+uid+"/progress").set(JSON.parse(JSON.stringify(P)));}catch(e){if(e&&(e.code==="invalid_argument"||e.code==="revoked"||e.code==="not_granted")){cloud=false;renderSyncBadge();}}},1200);}
+async function initCloud(){
+  try{
+    if(!window.claude||!window.claude.use)return;
+    const [d,u]=await Promise.all([window.claude.use("db"),window.claude.use("user")]);
+    if(!d||!u)return; const id=await u.id(); if(!id)return;
+    db=d;uid=id;
+    const snap=await db.doc("data/users/"+uid+"/progress").get();
+    if(snap.exists){P=mergeP(P,snap.data());lsSet(LKEY,P);}
+    cloud=true;renderSyncBadge();
+    if(view.name==="home")render();
+    save();
+  }catch(e){cloud=false;renderSyncBadge();}
+}
+function renderSyncBadge(){const el=document.getElementById("sync");if(el)el.innerHTML=syncHTML();}
+function syncHTML(){return cloud?'<span class="dot on"></span>Progressi salvati sul tuo account (anche da telefono)':'<span class="dot"></span>Progressi salvati in questo browser';}
+
+/* ------------------------------------------------------------------ utils */
+const $=s=>document.querySelector(s);
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+function shuffle(a){a=a.slice();for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a;}
+const fmt=n=>(Math.round(n*100)/100).toLocaleString("it-IT",{minimumFractionDigits:n%1?1:0,maximumFractionDigits:2});
+const LET="ABCDE";
+const pinRe=/^(tutte|nessuna|entramb)/i;
+function optOrder(q){const idx=[0,1,2,3,4].slice(0,q.o.length);const pinned=idx.filter(i=>pinRe.test(q.o[i]));const free=idx.filter(i=>!pinRe.test(q.o[i]));return shuffle(free).concat(pinned);}
+function norm(s){return String(s).toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g,"").replace(/[²]/g,"2").replace(/[³]/g,"3").replace(/[’‘`]/g,"'").replace(/−/g,"-").replace(/^(?:(?:il|lo|la|i|gli|le|un|uno|una)\s+|(?:l|un)')/,"").replace(/[.;:!?]+$/,"").replace(/\s+/g," ").trim();}
+function parseNum(s){let t=String(s).trim().replace(/−/g,"-").replace(/\s+/g,"").replace(/[×x*·]10\^?/gi,"e").replace(/,/g,".");
+  if(/^[+-]?\d+(\.\d+)?$/.test(t)||/^[+-]?\d*(\.\d+)?e[+-]?\d+$/i.test(t)){const v=Number(t);return isFinite(v)?v:null;}
+  if(/^[+-]?\d+(\.\d+)?%$/.test(t))return Number(t.slice(0,-1));
+  return null;}
+/* --- correzione del completamento: sinonimi, forme flesse, errori di battitura --- */
+const NUMW={zero:0,uno:1,una:1,due:2,tre:3,quattro:4,cinque:5,sei:6,sette:7,otto:8,nove:9,dieci:10,undici:11,dodici:12,venti:20,trenta:30,cento:100,mille:1000,meta:0.5};
+function loose(s){return norm(s).replace(/(?<=[a-z0-9])[\-‐–](?=[a-z0-9])/g," ").replace(/['_\/()]/g," ").replace(/\b(?:di|del|della|dello|dei|degli|delle|dell|d)\b/g," ").replace(/[a-z]{3,}/g,w=>w.replace(/k(?=[ei])/g,"ch").replace(/k/g,"c").replace(/y/g,"i")).replace(/\s+/g," ").trim();}
+const cmp=s=>loose(s).replace(/ /g,"");
+const stem=t=>{const r=t.replace(/[aeiou]+$/,"").replace(/([cg])h$/,"$1");return r.length<5?t:r;};
+const formKey=s=>loose(s).split(" ").map(stem).join("");
+// gruppi di termini equivalenti (valgono per tutte le domande)
+const SYN=[["dna","acido desossiribonucleico"],["rna","acido ribonucleico"],["mrna","rna messaggero"],["trna","rna transfer","rna di trasporto"],["rrna","rna ribosomiale"],
+ ["atp","adenosina trifosfato","adenosintrifosfato","adenosina 5 trifosfato"],["adp","adenosina difosfato","adenosindifosfato"],["camp","amp ciclico","adenosina monofosfato ciclico"],["nad","nad+","nicotinammide adenina dinucleotide"],
+ ["co2","anidride carbonica","diossido di carbonio","biossido di carbonio"],["h2o","acqua"],["nacl","cloruro di sodio"],["hcl","acido cloridrico"],["naoh","idrossido di sodio","soda caustica"],["nh3","ammoniaca"],["ch4","metano"],["h2so4","acido solforico"],
+ ["etino","acetilene","c2h2"],["etene","etilene","c2h4"],["metanolo","alcol metilico","alcool metilico"],["etanolo","alcol etilico","alcool etilico"],["propanone","acetone","dimetilchetone"],["metanale","formaldeide","aldeide formica"],["etanale","acetaldeide","aldeide acetica"],["toluene","metilbenzene"],["fenolo","idrossibenzene"],["acetico","etanoico"],["formico","metanoico"],["alcol","alcool"],["alcoli","alcooli"],
+ ["citodieresi","citocinesi","citochinesi"],["reticolo endoplasmatico","reticolo endoplasmico"],["golgi","apparato del golgi","apparato di golgi","complesso del golgi"],["apoptosi","morte cellulare programmata"],["sinapsi","giunzione sinaptica"],
+ ["emivita","tempo di dimezzamento","periodo di dimezzamento","dimezzamento","semivita"],["glucosio","destrosio"],["fruttosio","levulosio"],["eucariote","eucariota"],["procariote","procariota"],["cromosoma x","x"],["cromosoma y","y"],
+ ["krebs","ciclo di krebs","ciclo dell'acido citrico","ciclo degli acidi tricarbossilici"],["pompa sodio potassio","pompa na k","na k atpasi","atpasi na k"],
+ ["pascal","pa"],["hertz","hz"],["candela","cd"],["mole","mol"],["kilogrammo","chilogrammo","kg"]];
+const SYNI={};SYN.forEach((g,i)=>g.forEach(t=>{(SYNI[cmp(t)]=SYNI[cmp(t)]||[]).push(i);}));
+// coppie di parti di parola che cambiano il significato: una correzione automatica non deve mai scambiarle
+const GUARD=[["ipo","iper","iso"],["eso","endo"],["ana","cata"],["omo","etero"],["mono","di","tri","poli"],["cis","trans"],["alfa","beta","gamma"],["anion","cation"],["mitos","meios"],["aploid","diploid","triploid","poliploid"],["eson","intron"],["ossid","ridu"],["acid","basic"],["idrofil","idrofob"],["procariot","eucariot"],["isoton","iperton","ipoton"],["isobar","isocor","isoterm","adiabat"],["lisogen","litic"],["agonist","antagonist"],["simport","antiport","uniport"],["esocit","endocit"],["eucromat","eterocromat"],["destr","lev"],["orto","meta","para"],["alcan","alchen","alchin"],["etan","eten","etin"],["aldeid","cheton"],["aldos","chetos"],["ammin","ammid"],["purin","pirimidin"],["nucleotid","nucleosid"],["timin","tiamin"],["cistein","cistin"],["elettron","elettrod"],["conduz","convez"],["diffraz","rifraz","rifless"],["isotop","isoton","isobar"],["ester","eter"],["entalp","entrop"],["infra","ultra"],["costrutt","distrutt"],["dominan","recessiv"],["anabol","catabol"],["esoterm","endoterm"],["esoergon","endoergon"],["anod","catod"],["glucos","galattos","fruttos"],["maltos","lattos"],["fagocit","pinocit"],["elettrofil","nucleofil"],["omolit","eterolit"],["sn1","sn2"],["e1","e2"]];
+function guarded(right,inp){return GUARD.some(g=>{const a=g.filter(x=>right.includes(x)),b=g.filter(x=>inp.includes(x));return b.some(x=>!a.includes(x))&&a.some(x=>!b.includes(x));});}
+function osa(a,b){const m=a.length,n=b.length;if(Math.abs(m-n)>2)return 9;const d=[];for(let i=0;i<=m;i++){d[i]=[i];}for(let j=0;j<=n;j++)d[0][j]=j;
+  for(let i=1;i<=m;i++)for(let j=1;j<=n;j++){const c=a[i-1]===b[j-1]?0:1;d[i][j]=Math.min(d[i-1][j]+1,d[i][j-1]+1,d[i-1][j-1]+c);if(i>1&&j>1&&a[i-1]===b[j-2]&&a[i-2]===b[j-1])d[i][j]=Math.min(d[i][j],d[i-2][j-2]+1);}
+  return d[m][n];}
+// vocabolario dei termini reali presenti nella banca: un input che è un'altra parola vera non è un errore di battitura
+let VOCAB=null,VOCABF=null;
+function buildVocab(){VOCAB=new Set();VOCABF=new Set();const add=w=>{const c=cmp(w);if(c.length>=4&&/[a-z]/.test(c)){VOCAB.add(c);VOCABF.add(formKey(w));}};
+  BANK.forEach(q=>{[q.q,q.e||"",...(q.o||[]),...(q.c||[])].forEach(t=>{String(t).split(/[\s,.;:()«»"“”!?]+/).forEach(add);});(q.o||[]).forEach(add);(q.c||[]).forEach(add);});
+  ["etano","etene","etino","metano","metene","propano","propene","propino","isotoni","isobari","nucleoside","nucleosidi","tiamina","cistina","elettrodo","ipotonica","ipotonico","isotonica","iperosmotica","ipoosmotica","convezione","conduzione","diffrazione","rifrazione","riflessione","esotermica","endotermica","esoergonica","endoergonica","anabolismo","catabolismo","mitosi","meiosi","aploide","diploide","ammina","ammide","estere","etere","entalpia","entropia","anione","catione","anodo","catodo","maltosio","lattosio","galattosio","dominante","recessivo"].forEach(add);}
+function fillMatch(q,ans){
+  if(ans==null||String(ans).trim()==="")return {ok:null};
+  const a=norm(ans);
+  if(q.c.some(c=>norm(c)===a))return {ok:true,how:"exact"};
+  if(typeof q.n==="number"){let v=parseNum(ans);
+    if(v===null){const m=String(ans).trim().match(/^([+\-−]?\d[\d.,]*(?:\s*[×x*·]\s*10\^?\s*[+\-−]?\d+)?)\s*[a-zA-Zµμ°%\/²³·⁻¹ ]*$/);if(m)v=parseNum(m[1]);}
+    if(v===null&&a in NUMW)v=NUMW[a];
+    if(v!==null){let t=q.n;if(q.abs){v=Math.abs(v);t=Math.abs(t);}const tol=(q.tol!=null?q.tol:0.01);return {ok:Math.abs(v-t)<=Math.max(Math.abs(t)*tol,1e-9),how:"num"};}
+    if(q.c.every(c=>parseNum(c)!==null))return {ok:false};}
+  const inp=cmp(ans);if(!inp)return {ok:false};
+  const acc=new Set();q.c.forEach(c=>{const k=cmp(c);acc.add(k);(SYNI[k]||[]).forEach(i=>SYN[i].forEach(t=>acc.add(cmp(t))));});
+  if(acc.has(inp))return {ok:true,how:"syn"};
+  const fk=formKey(ans);
+  if(inp.length>=4&&q.c.some(c=>cmp(c).length>=4&&formKey(c)===fk))return {ok:true,how:"form"};
+  if(VOCAB===null)buildVocab();
+  if(VOCAB.has(inp)||VOCABF.has(fk))return {ok:false};   // è un altro termine, non un refuso
+  for(const c of q.c){const cc=cmp(c);if(!/[a-z]/.test(cc)||/\d/.test(cc)||cc.length<5)continue;
+    if(inp[0]!==cc[0]&&!(inp[0]===cc[1]&&inp[1]===cc[0]))continue;
+    const thr=cc.length<=8?1:2;
+    if(osa(inp,cc)<=thr&&!guarded(cc,inp))return {ok:true,how:"typo"};
+    const fc=formKey(c);if(fc.length>=5&&osa(fk,fc)<=thr&&!guarded(cc,inp))return {ok:true,how:"typo"};}
+  return {ok:false};}
+function checkFill(q,ans){return fillMatch(q,ans).ok;}
+function scoreOf(c,w){return c*EXAM.right+w*EXAM.wrong;}
+function verdict(score){if(score>=EXAM.max)return "30 e lode";if(score>=EXAM.pass)return "Superato";return "Non superato";}
+function ago(ts){const d=new Date(ts);return d.toLocaleDateString("it-IT",{day:"2-digit",month:"short"})+" "+d.toLocaleTimeString("it-IT",{hour:"2-digit",minute:"2-digit"});}
+function qstat(id){return P.qs[id]||[0,0,0,0];} // [seen, wrong, right, lastTs]
+function recordAnswer(q,ok){const s=qstat(q.id).slice();s[0]++;if(ok===true)s[2]++;else if(ok===false)s[1]++;s[3]=Date.now();P.qs[q.id]=s;}
+function errorPool(s){return BY[s].filter(q=>{const st=qstat(q.id);return st[1]>0&&st[1]>=st[2];});}
+
+/* ------------------------------------------------------------------ question selection */
+function pick(pool,n){
+  // favour least-seen questions, spread across units
+  const groups={};shuffle(pool).sort((a,b)=>qstat(a.id)[0]-qstat(b.id)[0]).forEach(q=>{(groups[q.u]=groups[q.u]||[]).push(q);});
+  const units=shuffle(Object.keys(groups));const out=[];let k=0;
+  while(out.length<n&&units.some(u=>groups[u].length)){const u=units[k%units.length];if(groups[u].length)out.push(groups[u].shift());k++;}
+  return out;}
+function buildExam(s,hard){
+  const pool=BY[s];
+  function take(type,n){
+    if(!hard)return pick(pool.filter(q=>q.t===type),n);
+    const h=pick(pool.filter(q=>q.t===type&&q.d),n);
+    if(h.length>=n)return h;
+    const ids=new Set(h.map(q=>q.id));
+    // complete with calculation questions first, then any other
+    const calc=pool.filter(q=>q.t===type&&!ids.has(q.id)&&(type==="fill"?typeof q.n==="number":/\d/.test(q.q)));
+    let more=pick(calc,n-h.length);more.forEach(q=>ids.add(q.id));
+    if(h.length+more.length<n)more=more.concat(pick(pool.filter(q=>q.t===type&&!ids.has(q.id)),n-h.length-more.length));
+    return h.concat(more);}
+  const mc=take("mc",EXAM.mc).sort((a,b)=>a.u-b.u);
+  const fi=take("fill",EXAM.fill).sort((a,b)=>a.u-b.u);
+  return mc.concat(fi);}
+
+/* ------------------------------------------------------------------ state */
+let view={name:"home"};let tick=null;
+
+function go(v){view=v;clearInterval(tick);render();window.scrollTo(0,0);}
+
+/* ------------------------------------------------------------------ HOME */
+function subjStats(s){const at=P.attempts.filter(a=>a.s===s&&a.mode==="exam");const best=at.length?Math.max(...at.map(a=>a.score)):null;const last=at.length?at[at.length-1].score:null;const passed=at.filter(a=>a.score>=EXAM.pass).length;return{at,best,last,passed};}
+function homeHTML(){
+  const draft=lsGet(DKEY);
+  let h=`<header class="hero"><div class="hero-in">
+    <div>
+      <p class="eyebrow">Medicina, Odontoiatria e Veterinaria · a.a. 2026/2027</p>
+      <h1>Simulatore <em>Semestre Filtro</em></h1>
+      <p class="lead">Prove nel formato ufficiale di Chimica, Fisica e Biologia, con oltre 2100 domande originali scritte sui syllabus del DM 418.</p>
+    </div>
+    <img class="hero-logo" src="data:image/png;base64,/*__LOGO__*/" alt="alfarma UNICAL">
+    <div class="format" role="list">
+      <div role="listitem"><b>31</b><span>domande</span></div>
+      <div role="listitem"><b>21 + 10</b><span>multipla + completamento</span></div>
+      <div role="listitem"><b>50 min</b><span>per prova</span></div>
+      <div role="listitem"><b>+1 · −0,1 · 0</b><span>esatta · errata · omessa</span></div>
+      <div role="listitem"><b>≥ 18</b><span>per superare</span></div>
+    </div>
+    <p class="by">A cura dell'associazione studentesca <b>ALFARMA</b> · <a href="https://www.instagram.com/alfarmaunical/" target="_blank" rel="noopener">@alfarmaunical</a></p>
+    <p class="sync" id="sync">${syncHTML()}</p>
+  </div></header>
+  <div class="wrap stack">`;
+  if(draft&&draft.items){h+=`<div class="confirm"><b>Hai una simulazione di ${esc(sname(draft.s))} lasciata a metà.</b><div class="row"><button class="btn primary" data-act="resume">Riprendi</button><button class="btn ghost" data-act="discard">Scarta</button></div></div>`;}
+  h+=`<section class="subjects">`;
+  ORDER.forEach(s=>{const st=subjStats(s);const errs=errorPool(s).length;const mcN=BY[s].filter(q=>q.t==="mc").length,fN=BY[s].length-mcN;
+    const sp=st.at.slice(-16).map(a=>`<i class="${a.score>=EXAM.pass?"":"fail"}" style="height:${Math.max(6,Math.min(100,Math.max(0,a.score)/EXAM.max*100))}%" title="${fmt(a.score)}/31${a.hard?" (difficile)":""}"></i>`).join("");
+    h+=`<article class="subj ${SUBJ[s].cls}">
+      <div class="subj-side">${ICON[s]}<div><b>${BY[s].length}</b><br><small>domande</small></div></div>
+      <div class="subj-main">
+      <div class="subj-head"><div><h2>${esc(SUBJ[s].name)}</h2><p class="note">${mcN} a risposta multipla · ${fN} a completamento</p></div>
+      ${st.at.length?`<div class="spark" aria-label="Ultimi punteggi rispetto alla soglia di 18">${sp}<div class="thr" style="bottom:${EXAM.pass/EXAM.max*100}%"><span>18</span></div></div>`:""}</div>
+      <div class="subj-stats">
+        <div class="stat"><b>${st.at.length}</b><span>simulazioni</span></div>
+        <div class="stat"><b>${st.last==null?"—":fmt(st.last)}</b><span>ultimo punteggio</span></div>
+        <div class="stat"><b>${st.best==null?"—":fmt(st.best)}</b><span>migliore</span></div>
+        <div class="stat"><b>${st.at.length?st.passed+"/"+st.at.length:"—"}</b><span>superate</span></div>
+      </div>
+      <div class="subj-actions">
+        <button class="btn primary" data-act="exam" data-s="${s}">Simulazione d'esame</button>
+        <button class="btn" data-act="examHard" data-s="${s}">Simulazione difficile</button>
+        <button class="btn" data-act="practice" data-s="${s}">Esercitazione per argomento</button>
+        <button class="btn" data-act="errors" data-s="${s}" ${errs?"":"disabled"}>Ripasso errori${errs?` (${errs})`:""}</button>
+      </div></div></article>`;});
+  h+=`</section>`;
+  h+=boardHTML();
+  const hist=P.attempts.slice().reverse().slice(0,15);
+  h+=`<section class="panel stack"><div class="row" style="justify-content:space-between"><h2>Storico</h2>${P.attempts.length?`<button class="btn ghost small" data-act="askreset">Azzera progressi</button>`:""}</div>`;
+  if(view.confirmReset){h+=`<div class="confirm"><b>Cancellare tutto lo storico e le statistiche delle domande?</b><div class="row"><button class="btn danger" data-act="reset">Sì, azzera</button><button class="btn ghost" data-act="noreset">Annulla</button></div></div>`;}
+  if(!hist.length){h+=`<p class="muted">Qui compariranno le tue simulazioni ed esercitazioni, con punteggio e data. Inizia da una delle tre materie.</p>`;}
+  else{h+=`<div class="tbl-wrap"><table class="hist"><thead><tr><th>Data</th><th>Materia</th><th>Tipo</th><th>Punteggio</th><th>Esito</th><th>E / S / O</th></tr></thead><tbody>`;
+    hist.forEach(a=>{const isExam=a.mode==="exam";h+=`<tr><td class="mono">${ago(a.date)}</td><td><span class="tag ${SUBJ[a.s].cls}">${esc(sname(a.s))}</span></td><td>${isExam?(a.hard?"Simulazione difficile":"Simulazione"):"Esercitazione"}</td><td class="mono">${fmt(a.score)}${isExam?"/31":"/"+a.n}</td><td>${isExam?`<span class="pill ${a.score>=EXAM.pass?"ok":"bad"}">${verdict(a.score)}</span>`:`<span class="pill neutral">${Math.round(a.correct/a.n*100)}% esatte</span>`}</td><td class="mono">${a.correct} / ${a.wrong} / ${a.omitted}</td></tr>`;});
+    h+=`</tbody></table></div>`;}
+  h+=`</section>
+  <footer><div class="foot-card"><div class="foot-brand"><img src="data:image/png;base64,/*__LOGO__*/" alt="">Associazione studentesca ALFARMA</div>
+  <p>Simulatore realizzato a cura dell'associazione studentesca ALFARMA per chi affronta il semestre filtro.</p>
+  <p><b>Instagram:</b> <a href="https://www.instagram.com/alfarmaunical/" target="_blank" rel="noopener">@alfarmaunical</a></p>
+  <p><b>Dove trovarci:</b> al Polifunzionale dell'UNICAL, di fronte al Poli Bistrot. <a class="maplink" href="https://www.google.com/maps/search/?api=1&amp;query=Alfarma%20-%20Associazione%20Studentesca&amp;query_place_id=ChIJv1rvz5WZPxMR6It4faIMo28" target="_blank" rel="noopener"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M12 2a7 7 0 0 0-7 7c0 5.2 7 13 7 13s7-7.8 7-13a7 7 0 0 0-7-7zm0 9.5A2.5 2.5 0 1 1 12 6.5a2.5 2.5 0 0 1 0 5z"/></svg>Apri in Google Maps</a></p>
+  ${SHEET_URL?`<p><button class="linkish" data-act="privacy">Informativa privacy</button></p>`:""}
+  <p><b>Contatti:</b> Ettore <a href="tel:+393249855554">324 985 5554</a> · Letizia <a href="tel:+393349868686">334 986 8686</a></p></div><p>Le domande sono originali, scritte sui syllabus ministeriali e tarate sugli appelli 2025/26 e sugli eserciziari più usati: non sono domande ufficiali né copiate dai libri. Affianca sempre le simulazioni del Ministero e degli atenei.</p><p>Formato e punteggi secondo il decreto per l'a.a. 2026/27 (21 multipla + 10 completamento, 50 minuti, −0,1 per risposta errata).</p></footer>
+  </div>`;
+  return h;}
+
+/* ------------------------------------------------------------------ EXAM */
+function startExam(s,items,mode,opts){
+  const ex={pid:mode==="exam"?ME:null,s,mode,items:items.map(q=>({id:q.id,ord:q.t==="mc"?optOrder(q):null,ans:null,flag:false})),cur:0,start:Date.now(),timed:mode==="exam",limit:EXAM.minutes*60*1000,submitted:false,confirm:false,opts:opts||{}};
+  if(mode==="exam")lsSet(DKEY,ex);
+  go({name:"exam",ex});}
+function examLeft(ex){return ex.limit-(Date.now()-ex.start);}
+function fmtTime(ms){ms=Math.max(0,ms);const m=Math.floor(ms/60000),s=Math.floor(ms/1000)%60;return String(m).padStart(2,"0")+":"+String(s).padStart(2,"0");}
+function examHTML(){
+  const ex=view.ex;const it=ex.items[ex.cur];const q=QI[it.id];const n=ex.items.length;const answered=ex.items.filter(x=>x.ans!=null&&x.ans!=="").length;
+  const isPractice=ex.mode!=="exam";const revealed=isPractice&&it.checked;
+  let h=`<div class="topbar ${SUBJ[ex.s].cls}"><div class="topbar-in">
+    <div class="row"><span class="tag">${esc(sname(ex.s))}</span><span class="progress-txt">${isPractice?(ex.mode==="errors"?"Ripasso errori":"Esercitazione"):(ex.opts&&ex.opts.hard?"Simulazione difficile":"Simulazione")} · ${answered}/${n} risposte</span></div>
+    <div class="row">${ex.timed?`<span class="timer" id="timer" aria-live="off">${fmtTime(examLeft(ex))}</span>`:""}
+    <button class="btn ${isPractice?"":"primary"} small" data-act="askSubmit">${isPractice?"Termina":"Consegna"}</button></div></div></div>
+  <div class="wrap stack ${SUBJ[ex.s].cls}">`;
+  if(ex.confirm){const om=n-answered;h+=`<div class="confirm" role="alertdialog"><b>${isPractice?"Terminare l'esercitazione?":"Consegnare la prova?"}</b><p>${om?`Hai ${om} domand${om===1?"a":"e"} senza risposta: ${isPractice?"non verranno conteggiate.":"varranno 0 punti."}`:"Hai risposto a tutte le domande."}</p><div class="row"><button class="btn primary" data-act="submit">${isPractice?"Termina e vedi il riepilogo":"Consegna"}</button><button class="btn ghost" data-act="cancelSubmit">Torna alle domande</button></div></div>`;}
+  h+=`<article class="qcard"><div class="qmeta"><span class="eyebrow">${q.t==="mc"?"Risposta multipla":"Completamento"} · ${esc(SUBJ[ex.s].units[q.u])}</span>${!isPractice?`<button class="btn ghost small" data-act="flag" aria-pressed="${it.flag}">${it.flag?"★ Segnata":"☆ Segna per dopo"}</button>`:""}</div>
+    <p class="qtext"><span class="num">${ex.cur+1}.</span>${esc(q.q)}</p>`;
+  if(q.t==="mc"){h+=`<div class="opts" role="radiogroup">`;it.ord.forEach((oi,k)=>{let cls="";if(revealed){if(oi===0)cls="correct";else if(it.ans===oi)cls="wrong";}else if(it.ans===oi)cls="sel";
+      h+=`<button class="opt ${cls}" role="radio" aria-checked="${it.ans===oi}" data-act="choose" data-o="${oi}" ${revealed?"disabled":""}><span class="let">${LET[k]}</span><span>${esc(q.o[oi])}</span></button>`;});h+=`</div>`;
+    if(!isPractice&&it.ans!=null)h+=`<div><button class="btn ghost small" data-act="clear">Togli la risposta</button></div>`;}
+  else{let cls="";if(revealed)cls=it.ok?"ok":"bad";
+    h+=`<div class="fill"><input id="fill-${esc(it.id)}" type="text" inputmode="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Scrivi la parola o il numero mancante" value="${esc(it.ans||"")}" class="${cls}" ${revealed?"disabled":""} aria-label="Risposta"></div>
+    <p class="note">Scrivi una sola parola o un numero, senza unità di misura se è già indicata nel testo. Per i decimali puoi usare la virgola. Sono accettati sinonimi, singolare e plurale e piccoli errori di battitura.</p>`;}
+  if(revealed){let head;if(q.t==="mc")head=it.ans==null?"Nessuna risposta.":(it.ans===0?"Esatto.":"Sbagliato.");else head=it.ok===null?"Nessuna risposta.":(it.ok?(it.how==="typo"?"Esatto, ma attenzione all'ortografia.":"Esatto."):"Sbagliato.");
+    h+=`<div class="explain"><b>${head}</b> ${q.t==="fill"?`${it.how==="typo"?"Si scrive":"Risposta attesa:"} <b>${esc(q.c[0])}</b>${q.c.length>1&&it.how!=="typo"?` (accettati anche: ${q.c.slice(1,4).map(esc).join(", ")})`:""}. `:""}${esc(q.e)}</div>`;}
+  h+=`<div class="qfoot"><button class="btn" data-act="prev" ${ex.cur===0?"disabled":""}>← Precedente</button>`;
+  if(isPractice&&!revealed)h+=`<button class="btn primary" data-act="check">Verifica</button>`;
+  h+=`<button class="btn ${isPractice&&revealed?"primary":""}" data-act="next">${ex.cur===n-1?(isPractice?"Riepilogo":"Fine"):"Successiva →"}</button></div></article>`;
+  h+=`<section class="panel stack"><h3>Navigazione</h3><div class="navgrid">`;
+  ex.items.forEach((x,i)=>{const qq=QI[x.id];if(i===0)h+=`<div class="nav-sep">Risposta multipla</div>`;if(qq.t==="fill"&&(i===0||QI[ex.items[i-1].id].t==="mc"))h+=`<div class="nav-sep">Completamento</div>`;
+    let cls=(x.ans!=null&&x.ans!=="")?"ans":"";if(isPractice&&x.checked){cls=x.ok===true?"r-ok":x.ok===false?"r-bad":"r-om";}
+    h+=`<button class="nav-cell ${cls} ${i===ex.cur?"cur":""} ${x.flag?"flag":""}" data-act="goto" data-i="${i}" aria-label="Domanda ${i+1}">${i+1}</button>`;});
+  h+=`</div>${!isPractice?`<p class="note">Le domande con il pallino giallo sono segnate per un secondo controllo. Puoi cambiare risposta fino alla consegna.</p>`:""}</section>
+  <div class="row"><button class="btn ghost" data-act="quit">${isPractice?"Esci senza salvare":"Abbandona la simulazione"}</button></div></div>`;
+  return h;}
+function persistDraft(){if(view.name==="exam"&&view.ex.mode==="exam"&&!view.ex.submitted)lsSet(DKEY,view.ex);}
+function readFill(){const ex=view.ex;const it=ex.items[ex.cur];const q=QI[it.id];if(q.t!=="fill")return;const el=document.getElementById("fill-"+it.id);if(el&&!el.disabled){const v=el.value.trim();it.ans=v===""?null:v;}}
+function checkItem(it){const q=QI[it.id];if(q.t==="mc")it.ok=it.ans==null?null:it.ans===0;else{const r=fillMatch(q,it.ans);it.ok=r.ok;it.how=r.how||null;}}
+function submitExam(){
+  const ex=view.ex;readFill();ex.submitted=true;clearInterval(tick);
+  ex.items.forEach(it=>{checkItem(it);});
+  const isPractice=ex.mode!=="exam";
+  const counted=isPractice?ex.items.filter(it=>it.checked||it.ok!==null):ex.items;
+  counted.forEach(it=>recordAnswer(QI[it.id],it.ok));
+  const c=counted.filter(i=>i.ok===true).length,w=counted.filter(i=>i.ok===false).length,o=ex.items.length-c-w;
+  const units={};ex.items.forEach(it=>{const u=QI[it.id].u;units[u]=units[u]||[0,0];units[u][1]++;if(it.ok===true)units[u][0]++;});
+  const a={id:Date.now().toString(36)+Math.random().toString(36).slice(2,6),pid:ex.mode==="exam"?(ex.pid||null):null,s:ex.s,mode:ex.mode==="exam"?"exam":"practice",hard:!!(ex.opts&&ex.opts.hard),date:Date.now(),score:Math.round(scoreOf(c,w)*100)/100,correct:c,wrong:w,omitted:o,n:ex.items.length,dur:Date.now()-ex.start,units};
+  if(isPractice&&c+w===0){lsSet(DKEY,null);go({name:"home"});return;}
+  P.attempts.push(a);P.attempts=P.attempts.slice(-300);save();if(a.mode==="exam")enqueue(a,ex);if(ex.mode==="exam")lsSet(DKEY,null);
+  go({name:"result",ex,a,filter:"all"});}
+
+/* ------------------------------------------------------------------ RESULT */
+function ringHTML(score,max,isExam){const R=64,C=2*Math.PI*R;const f=Math.max(0,Math.min(1,score/max));const thr=EXAM.pass/EXAM.max;
+  return `<div class="ring"><svg viewBox="0 0 150 150"><circle class="track" cx="75" cy="75" r="${R}" stroke-width="14" fill="none"/><circle class="val" cx="75" cy="75" r="${R}" stroke-width="14" fill="none" stroke-linecap="round" stroke-dasharray="${C}" stroke-dashoffset="${C*(1-f)}"/>${isExam?`<line class="thr" x1="${75+R-11}" y1="75" x2="${75+R+11}" y2="75" stroke-width="3" transform="rotate(${thr*360} 75 75)"/>`:""}</svg><div class="ring-txt"><div class="bigscore">${fmt(score)}<small>su ${max}</small></div></div></div>`;}
+function resultHTML(){
+  const {ex,a}=view;const isExam=a.mode==="exam";const s=ex.s;
+  let h=`<div class="wrap stack ${SUBJ[s].cls}"><div><button class="btn ghost back" data-act="home">← Torna alle materie</button></div>
+  <section class="panel stack"><p class="eyebrow">${esc(SUBJ[s].name)} · ${isExam?(a.hard?"simulazione difficile":"simulazione d'esame"):"esercitazione"} · ${Math.round(a.dur/60000)} min</p>
+  <div class="score-head">${ringHTML(a.score,isExam?EXAM.max:a.n,isExam)}
+  <div class="stack" style="gap:6px">${isExam?`<p class="verdict ${a.score>=EXAM.pass?"ok":"bad"}">${verdict(a.score)}</p><p class="muted">${a.score>=EXAM.pass?"Sopra la soglia di 18.":`Ti mancano ${fmt(EXAM.pass-a.score)} punti per arrivare a 18.`} Punteggio = esatte × 1 − errate × 0,1.</p>`:`<p class="verdict">${a.correct+a.wrong?Math.round(a.correct/(a.correct+a.wrong)*100):0}% di risposte esatte</p><p class="muted">Calcolato sulle domande a cui hai risposto. Il punteggio usa le regole d'esame.</p>`}</div></div>
+  ${isExam&&a.pid?(()=>{const B=board(s);const i=B.findIndex(r=>r.code===a.pid);return `<p class="rankline">Codice <b class="mono">${esc(a.pid)}</b> · ${i+1}° su ${B.length} in graduatoria di ${esc(sname(s))}</p>`;})():""}
+  <div class="counts"><div><b style="color:var(--ok)">${a.correct}</b><span>esatte</span></div><div><b style="color:var(--bad)">${a.wrong}</b><span>errate</span></div><div><b>${a.omitted}</b><span>omesse</span></div></div></section>`;
+  h+=`<section class="panel stack"><h3>Per argomento</h3><div class="bars">`;
+  Object.keys(a.units).sort((x,y)=>x-y).forEach(u=>{const [c,t]=a.units[u];h+=`<div class="bar-row"><span class="lab">${esc(SUBJ[s].units[u])}</span><span class="mono" style="text-align:right">${c}/${t}</span><div class="bar-track"><div class="bar-fill" style="width:${t?c/t*100:0}%"></div></div></div>`;});
+  const weakest=Object.keys(a.units).filter(u=>a.units[u][1]>=2).sort((x,y)=>a.units[x][0]/a.units[x][1]-a.units[y][0]/a.units[y][1])[0];
+  h+=`</div>${weakest&&a.units[weakest][0]<a.units[weakest][1]?`<div class="row"><button class="btn" data-act="practiceUnit" data-s="${s}" data-u="${weakest}">Esercitati su: ${esc(SUBJ[s].units[weakest])}</button></div>`:""}</section>`;
+  h+=planHTML(ex,a);
+  const f=view.filter;
+  h+=`<section class="stack"><div class="row" style="justify-content:space-between"><h3>Correzione</h3><div class="seg" role="group" aria-label="Filtro">
+    <button data-act="filter" data-f="all" aria-pressed="${f==="all"}">Tutte</button><button data-act="filter" data-f="bad" aria-pressed="${f==="bad"}">Errate</button><button data-act="filter" data-f="om" aria-pressed="${f==="om"}">Omesse</button></div></div>`;
+  ex.items.forEach((it,i)=>{const q=QI[it.id];const st=it.ok===true?"ok":it.ok===false?"bad":"om";if(f==="bad"&&st!=="bad")return;if(f==="om"&&st!=="om")return;
+    if(ex.mode!=="exam"&&!it.checked&&it.ok===null&&f!=="om")return;
+    let your,right;
+    if(q.t==="mc"){const L=oi=>LET[it.ord.indexOf(oi)];your=it.ans==null?"<i>nessuna</i>":`<b>${L(it.ans)})</b> ${esc(q.o[it.ans])}`;right=`<b>${L(0)})</b> ${esc(q.o[0])}`;}
+    else{your=it.ans==null?"<i>nessuna</i>":`<b>${esc(it.ans)}</b>`;right=`<b>${esc(q.c[0])}</b>`;}
+    h+=`<article class="review-item ${st}"><div class="qmeta"><span class="eyebrow">${i+1} · ${esc(SUBJ[s].units[q.u])}</span><span class="pill ${st==="ok"?"ok":st==="bad"?"bad":"neutral"}">${st==="ok"?"+1":st==="bad"?(isExam?"−0,1":"errata"):"0"}</span></div>
+      <p>${esc(q.q)}</p><p class="ans-line">La tua risposta: ${your}</p>${st!=="ok"?`<p class="ans-line">Risposta corretta: ${right}</p>`:""}${st==="ok"&&it.how==="typo"?`<p class="ans-line">Accettata nonostante un errore di battitura: si scrive ${right}</p>`:""}<div class="explain">${esc(q.e)}</div></article>`;});
+  h+=`</section><div class="row"><button class="btn primary" data-act="${isExam?(a.hard?"examHard":"exam"):"practice"}" data-s="${s}">${isExam?(a.hard?"Nuova simulazione difficile":"Nuova simulazione"):"Nuova esercitazione"}</button><button class="btn" data-act="home">Torna alle materie</button></div></div>`;
+  return h;}
+
+
+/* ------------------------------------------------------------------ PIANO DI RIPASSO */
+function topicHist(id){let r=0,w=0,n=0;BY[TP[id].s].forEach(q=>{if(q.tp!==id)return;n++;const st=qstat(q.id);r+=st[2];w+=st[1];});return {r,w,n};}
+const pct=(a,b)=>b?Math.round(a/b*100):0;
+function planHTML(ex,a){
+  const s=ex.s,isExam=a.mode==="exam";
+  const T={};const typ={mc:[0,0],fill:[0,0]};let calcBad=0,allBad=0;
+  ex.items.forEach((it,i)=>{const q=QI[it.id];const answered=it.ok!==null;
+    if(!isExam&&!answered&&!it.checked)return;
+    const t=T[q.tp]=T[q.tp]||{id:q.tp,ok:0,bad:0,om:0,nums:[]};
+    if(it.ok===true)t.ok++;else{if(it.ok===false)t.bad++;else t.om++;t.nums.push(i+1);allBad++;if(TP[q.tp].t==="calc")calcBad++;}
+    if(answered){typ[q.t][1]++;if(it.ok)typ[q.t][0]++;}});
+  const weak=Object.values(T).filter(t=>t.bad+t.om>0).sort((x,y)=>(y.bad+y.om*0.8)-(x.bad+x.om*0.8)||x.ok-y.ok);
+  // consigli di strategia
+  const tips=[];
+  const omMc=ex.items.filter(it=>it.ok===null&&QI[it.id].t==="mc").length,omF=ex.items.filter(it=>it.ok===null&&QI[it.id].t==="fill").length;
+  if(isExam&&omMc>=2)tips.push(["Non lasciare in bianco la multipla",`Hai lasciato ${omMc} domande a risposta multipla senza risposta. Con 5 alternative e penalità di −0,1, anche una risposta del tutto casuale vale in media <b>+0,12 punti</b>; se riesci a escludere un'alternativa sale a +0,175. Rispondi sempre, partendo dall'eliminare le opzioni sicuramente false.`]);
+  if(isExam&&omF>=3)tips.push(["Completamento: scrivi comunque un'ipotesi",`${omF} domande a completamento sono rimaste vuote. Un errore costa solo 0,1: se hai un'idea del termine o dell'ordine di grandezza del risultato, scrivilo.`]);
+  if(isExam){const used=a.dur/60000;
+    if(used>=EXAM.minutes-0.5&&a.omitted>0)tips.push(["Gestione del tempo",`Il tempo è finito prima che rispondessi a tutto. Hai circa <b>1 minuto e 37 secondi</b> per domanda: fai un primo giro rispondendo solo a ciò che sai subito, segna con la bandierina le domande lunghe o di calcolo e torna su quelle alla fine.`]);
+    else if(used<EXAM.minutes*0.6&&a.score<EXAM.pass)tips.push(["Usa tutto il tempo",`Hai consegnato dopo ${Math.max(1,Math.round(used))} minut${Math.max(1,Math.round(used))>1?"i":"o"} su ${EXAM.minutes}. Il tempo avanzato serve a rileggere le domande con «NON», «ECCETTO» o «FALSA», ricontrollare i calcoli e le unità di misura.`]);}
+  if(typ.mc[1]>=4&&typ.fill[1]>=3){const pm=pct(...typ.mc),pf=pct(...typ.fill);
+    if(pm-pf>=20)tips.push(["Il completamento è il tuo punto debole",`Esatte: ${pm}% nella multipla contro ${pf}% nel completamento. Senza alternative davanti devi richiamare il termine a memoria: allenati con il <b>richiamo attivo</b> (copri la risposta e scrivila) e fai esercitazioni «solo completamento». Attenzione anche al formato: numero senza unità, virgola decimale, termine al singolare.`]);
+    else if(pf-pm>=20)tips.push(["Attenzione ai distrattori",`Nel completamento vai meglio (${pf}%) che nella multipla (${pm}%): le alternative ti stanno ingannando. Leggi tutte e 5 le opzioni prima di scegliere e diffida di quelle «quasi giuste», che cambiano un solo dettaglio.`]);}
+  if(allBad>=3&&calcBad/allBad>=0.5)tips.push(["Più esercizi di calcolo",`${calcBad} errori su ${allBad} sono in argomenti di calcolo. Il problema spesso non è la teoria ma l'esecuzione: scrivi dati e formula prima di fare i conti, porta tutto in unità SI e controlla che l'ordine di grandezza del risultato abbia senso.`]);
+  if(isExam&&a.score>=EXAM.pass+6&&!weak.length)tips.push(["Ottimo lavoro","Nessun argomento da segnalare. Prova la simulazione difficile per metterti alla prova."]);
+
+  let h=`<section class="panel stack plan"><div><p class="eyebrow">Feedback personalizzato</p><h3>Piano di ripasso</h3></div>`;
+  if(tips.length)h+=`<div class="tips">${tips.map(t=>`<div class="tip"><b>${t[0]}</b><p>${t[1]}</p></div>`).join("")}</div>`;
+  if(weak.length){
+    h+=`<p class="muted">Gli argomenti dove hai perso punti, in ordine di priorità. Per ognuno: cosa rivedere e il metodo di studio più adatto a quel tipo di contenuto.</p><div class="topic-list">`;
+    weak.slice(0,5).forEach((t,k)=>{const tp=TP[t.id],te=TECH[tp.t],hi=topicHist(t.id);const hs=hi.r+hi.w;
+      h+=`<article class="topic-card${k===0?" first":""}"><header><span class="rank">${k+1}</span><div><b>${esc(tp.n)}</b><small>${esc(SUBJ[s].units[tp.u])}</small></div></header>
+      <p class="tstat">${t.bad?`<span class="pill bad">${t.bad} ${t.bad>1?"errate":"errata"}</span>`:""}${t.om?`<span class="pill neutral">${t.om} ${t.om>1?"omesse":"omessa"}</span>`:""}${t.ok?`<span class="pill ok">${t.ok} ${t.ok>1?"esatte":"esatta"}</span>`:""}<span class="muted small">domand${t.nums.length>1?"e":"a"} ${t.nums.join(", ")}${hs>=4?` · nel complesso ${pct(hi.r,hs)}% esatte`:""}</span></p>
+      <div class="tcols"><div><h4>Cosa rivedere</h4><ul>${tp.r.map(x=>`<li>${esc(x)}</li>`).join("")}</ul></div>
+      <div class="tech"><h4>Come studiarlo · ${esc(te.n)}</h4><p>${esc(te.d)}</p></div></div>
+      <div class="row"><button class="btn small" data-act="practiceTopic" data-s="${s}" data-tp="${t.id}">Esercitati su questo argomento (${Math.min(15,BY[s].filter(q=>q.tp===t.id).length)} domande)</button></div></article>`;});
+    h+=`</div>`;
+    if(weak.length>5)h+=`<p class="muted small">Altri argomenti con errori: ${weak.slice(5,13).map(t=>esc(TP[t.id].n)).join(" · ")}${weak.length>13?` e altri ${weak.length-13}`:""}.</p>`;}
+  else if(!tips.length)h+=`<p class="muted">Nessun errore in questa prova: niente da ripassare.</p>`;
+  // argomenti deboli ricorrenti nello storico
+  const shown=new Set(weak.slice(0,5).map(t=>t.id));
+  const rec=Object.values(TP).filter(t=>t.s===s&&!shown.has(t.id)).map(t=>({t,h:topicHist(t.id)})).filter(x=>x.h.r+x.h.w>=5&&x.h.r/(x.h.r+x.h.w)<0.6).sort((x,y)=>x.h.r/(x.h.r+x.h.w)-y.h.r/(y.h.r+y.h.w)).slice(0,4);
+  if(rec.length)h+=`<div class="stack" style="gap:8px"><h4>Punti deboli ricorrenti nelle prove precedenti</h4>${rec.map(x=>`<div class="rec-row"><span><b>${esc(x.t.n)}</b> <small class="muted">${pct(x.h.r,x.h.r+x.h.w)}% esatte su ${x.h.r+x.h.w} risposte · metodo: ${esc(TECH[x.t.t].n)}</small></span><button class="btn ghost small" data-act="practiceTopic" data-s="${s}" data-tp="${x.t.id}">Esercitati</button></div>`).join("")}</div>`;
+  return h+`</section>`;}
+/* ------------------------------------------------------------------ PRACTICE SETUP */
+function practiceHTML(){
+  const s=view.s;const sel=view.units;
+  let h=`<div class="wrap stack ${SUBJ[s].cls}"><div><button class="btn ghost back" data-act="home">← Torna alle materie</button></div>
+  <header class="page-head stack" style="gap:6px"><p class="eyebrow">Esercitazione · senza timer · correzione immediata</p><h1>${esc(SUBJ[s].name)}</h1></header>
+  <section class="panel stack"><div class="row" style="justify-content:space-between"><h3>Argomenti</h3><div class="row"><button class="btn ghost small" data-act="uall">Tutti</button><button class="btn ghost small" data-act="unone">Nessuno</button></div></div><div class="units">`;
+  Object.keys(SUBJ[s].units).forEach(u=>{const qs=BY[s].filter(q=>String(q.u)===u);const seen=qs.filter(q=>qstat(q.id)[0]>0).length;const r=qs.reduce((a,q)=>a+qstat(q.id)[2],0),w=qs.reduce((a,q)=>a+qstat(q.id)[1],0);
+    h+=`<label class="unit-opt"><input type="checkbox" data-act="utoggle" data-u="${u}" ${sel.includes(u)?"checked":""}><span><b>${u}. ${esc(SUBJ[s].units[u])}</b><br><small>${qs.length} domande · viste ${seen}${r+w?` · ${Math.round(r/(r+w)*100)}% esatte`:""}</small></span></label>`;});
+  h+=`</div></section><section class="panel stack"><div class="row" style="gap:16px;align-items:flex-end">
+    <label class="field">Tipo di domande<select id="ptype"><option value="all">Multipla e completamento</option><option value="mc">Solo risposta multipla</option><option value="fill">Solo completamento</option></select></label>
+    <label class="field">Numero di domande<select id="pnum"><option>10</option><option selected>15</option><option>20</option><option>31</option></select></label></div>
+    <div class="row"><button class="btn primary" data-act="startPractice" ${sel.length?"":"disabled"}>Inizia</button></div></section></div>`;
+  return h;}
+
+/* ------------------------------------------------------------------ RENDER + EVENTS */
+function render(){const app=$("#app");if(view.name==="home")loadGB();
+  if(view.name==="home")app.innerHTML=homeHTML();
+  else if(view.name==="exam"){app.innerHTML=examHTML();if(view.ex.timed&&!view.ex.submitted){clearInterval(tick);tick=setInterval(()=>{const left=examLeft(view.ex);const t=$("#timer");if(t){t.textContent=fmtTime(left);t.classList.toggle("low",left<5*60000);}if(left<=0){clearInterval(tick);submitExam();}},500);}
+    const inp=document.querySelector(".fill input:not([disabled])");if(inp){inp.addEventListener("input",()=>{readFill();persistDraft();updateCounter();});inp.addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();act(view.ex.mode==="exam"||view.ex.items[view.ex.cur].checked?"next":"check");}});}}
+  else if(view.name==="result")app.innerHTML=resultHTML();
+  else if(view.name==="practice")app.innerHTML=practiceHTML();}
+function updateCounter(){const ex=view.ex;const el=document.querySelector(".progress-txt");if(!el)return;const n=ex.items.length,answered=ex.items.filter(x=>x.ans!=null&&x.ans!=="").length;el.textContent=el.textContent.replace(/\d+\/\d+ risposte/,answered+"/"+n+" risposte");const cell=document.querySelector(`.nav-cell[data-i="${ex.cur}"]`);if(cell&&ex.mode==="exam")cell.classList.toggle("ans",ex.items[ex.cur].ans!=null);}
+
+function act(a,d){d=d||{};
+  const ex=view.ex;
+  switch(a){
+  case "home":go({name:"home"});break;
+  case "exam":case "examHard":view.who={next:a,s:d.s,step:ME&&P.pr[ME]?"confirm":(Object.keys(P.pr).length?"pick":"new")};renderWho();break;
+  case "whoGo":{const w=view.who;if(!w)break;view.who=null;renderWho();lsSet(DKEY,null);if(w.next==="examHard")startExam(w.s,buildExam(w.s,true),"exam",{hard:true});else startExam(w.s,buildExam(w.s),"exam");break;}
+  case "whoPick":setMe(d.code);view.who.step="confirm";renderWho();break;
+  case "whoNew":view.who.step="new";renderWho();break;
+  case "whoOther":view.who.step=Object.keys(P.pr).length>1?"pick":"new";renderWho();break;
+  case "whoCreate":whoCreate();break;
+  case "whoClose":view.who=view.who&&view.who.back?view.who.back:null;renderWho();break;
+  case "whoInfo":view.who.info=!view.who.info;renderWho();break;
+  case "whoPrivacy":view.who={step:"privacy",back:view.who};renderWho();break;
+  case "privacy":view.who={step:"privacy"};renderWho();break;
+  case "whoConsent":if(ME&&P.pr[ME]){P.pr[ME].ok=!P.pr[ME].ok;save();}break;
+  case "lbScope":view.lbScope=d.v;render();break;
+  case "lb":view.lb=d.s;render();break;
+  case "resume":{const dr=lsGet(DKEY);if(dr){go({name:"exam",ex:dr});}break;}
+  case "discard":lsSet(DKEY,null);render();break;
+  case "practice":go({name:"practice",s:d.s,units:Object.keys(SUBJ[d.s].units)});break;
+  case "practiceUnit":go({name:"practice",s:d.s,units:[String(d.u)]});break;
+  case "practiceTopic":{const items=pick(BY[d.s].filter(q=>q.tp===d.tp),15).sort((x,y)=>x.t===y.t?0:(x.t==="mc"?-1:1));if(items.length)startExam(d.s,items,"practice");break;}
+  case "errors":{const pool=shuffle(errorPool(d.s)).slice(0,20);if(pool.length)startExam(d.s,pool,"errors");break;}
+  case "utoggle":{const u=d.u;const i=view.units.indexOf(u);if(i>=0)view.units.splice(i,1);else view.units.push(u);render();break;}
+  case "uall":view.units=Object.keys(SUBJ[view.s].units);render();break;
+  case "unone":view.units=[];render();break;
+  case "startPractice":{const type=$("#ptype").value,num=+$("#pnum").value;let pool=BY[view.s].filter(q=>view.units.includes(String(q.u))&&(type==="all"||q.t===type));const items=pick(pool,num).sort((x,y)=>(x.t===y.t?x.u-y.u:(x.t==="mc"?-1:1)));if(items.length)startExam(view.s,items,"practice");break;}
+  case "choose":{const it=ex.items[ex.cur];const o=+d.o;it.ans=(ex.mode==="exam"&&it.ans===o)?null:o;persistDraft();render();break;}
+  case "clear":ex.items[ex.cur].ans=null;persistDraft();render();break;
+  case "flag":ex.items[ex.cur].flag=!ex.items[ex.cur].flag;persistDraft();render();break;
+  case "check":{readFill();const it=ex.items[ex.cur];checkItem(it);it.checked=true;render();break;}
+  case "prev":readFill();if(ex.cur>0){ex.cur--;persistDraft();render();}break;
+  case "next":readFill();if(ex.mode!=="exam"&&!ex.items[ex.cur].checked&&ex.items[ex.cur].ans!=null){const it=ex.items[ex.cur];checkItem(it);it.checked=true;render();break;}
+    if(ex.cur<ex.items.length-1){ex.cur++;persistDraft();render();window.scrollTo({top:0});}else{ex.confirm=true;render();window.scrollTo({top:0});}break;
+  case "goto":readFill();ex.cur=+d.i;persistDraft();render();window.scrollTo({top:0});break;
+  case "askSubmit":readFill();ex.confirm=true;render();window.scrollTo({top:0});break;
+  case "cancelSubmit":ex.confirm=false;render();break;
+  case "submit":submitExam();break;
+  case "quit":if(ex.mode==="exam"){if(!ex.quitAsk){ex.quitAsk=true;ex.confirm=false;render();showQuit();break;}}lsSet(DKEY,null);go({name:"home"});break;
+  case "quitYes":lsSet(DKEY,null);go({name:"home"});break;
+  case "filter":view.filter=d.f;render();break;
+  case "askreset":view.confirmReset=true;render();break;
+  case "noreset":view.confirmReset=false;render();break;
+  case "reset":P={attempts:[],qs:{},v:1,pr:P.pr||{}};lsSet(DKEY,null);save();view.confirmReset=false;render();break;
+  }}
+function showQuit(){const wrap=document.querySelector(".wrap");const box=document.createElement("div");box.className="confirm";box.innerHTML=`<b>Abbandonare la simulazione?</b><p>Le risposte date finora non verranno salvate.</p><div class="row"><button class="btn danger" data-act="quitYes">Abbandona</button><button class="btn ghost" data-act="quitNo">Continua la prova</button></div>`;wrap.prepend(box);window.scrollTo({top:0});}
+document.addEventListener("click",e=>{const b=e.target.closest("[data-act]");if(!b)return;if(b.classList.contains("overlay")&&e.target!==b)return;if(b.tagName==="INPUT")return;if(b.dataset.act==="quitNo"){view.ex.quitAsk=false;render();return;}e.preventDefault();act(b.dataset.act,b.dataset);});
+document.addEventListener("change",e=>{const b=e.target.closest("input[data-act]");if(b)act(b.dataset.act,b.dataset);});
+document.addEventListener("keydown",e=>{if(view.who){if(e.key==="Escape"){view.who=null;renderWho();}else if(e.key==="Enter"&&e.target.id==="who-n"){e.preventDefault();whoCreate();}return;}if(view.name!=="exam"||e.target.tagName==="INPUT"||e.target.tagName==="SELECT"||e.target.tagName==="TEXTAREA")return;const ex=view.ex;const it=ex.items[ex.cur];const q=QI[it.id];
+  if(e.key==="ArrowRight"){act("next");}else if(e.key==="ArrowLeft"){act("prev");}
+  else if(q.t==="mc"&&/^[a-eA-E1-5]$/.test(e.key)&&!it.checked){const k=/\d/.test(e.key)?+e.key-1:"abcde".indexOf(e.key.toLowerCase());if(k<it.ord.length)act("choose",{o:it.ord[k]});}});
+window.addEventListener("pagehide",()=>{if(view.name==="exam"){readFill();persistDraft();}});
+
+window.__sim={fillMatch,TP,TOPICS,BANK,checkFill,parseNum,norm,buildExam,EXAM,P:()=>P};
+render();initCloud();flush();
+})();
+</script>
