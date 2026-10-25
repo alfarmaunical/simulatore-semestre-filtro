@@ -145,7 +145,11 @@ const LET="ABCDE";
 const pinRe=/^(tutte|nessuna|entramb)/i;
 function optOrder(q){const idx=[0,1,2,3,4].slice(0,q.o.length);const pinned=idx.filter(i=>pinRe.test(q.o[i]));const free=idx.filter(i=>!pinRe.test(q.o[i]));return shuffle(free).concat(pinned);}
 function norm(s){return String(s).toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g,"").replace(/[²]/g,"2").replace(/[³]/g,"3").replace(/[’‘`]/g,"'").replace(/−/g,"-").replace(/^(?:(?:il|lo|la|i|gli|le|un|uno|una)\s+|(?:l|un)')/,"").replace(/[.;:!?]+$/,"").replace(/\s+/g," ").trim();}
-function parseNum(s){let t=String(s).trim().replace(/−/g,"-").replace(/\s+/g,"").replace(/[×x*·]10\^?/gi,"e").replace(/,/g,".");
+const SUP={"⁰":"0","¹":"1","²":"2","³":"3","⁴":"4","⁵":"5","⁶":"6","⁷":"7","⁸":"8","⁹":"9","⁻":"-","⁺":"+"};
+function parseNum(s){let t=String(s).trim().replace(/([⁰¹²³⁴⁵⁶⁷⁸⁹⁻⁺]+)/g,m=>"^"+[...m].map(c=>SUP[c]).join("")).replace(/\^\^/g,"^").replace(/−/g,"-").replace(/\s+/g,"");
+  {const f=t.replace(/,/g,".").match(/^([+-]?\d+(?:\.\d+)?)\/(\d+(?:\.\d+)?)$/);if(f&&Number(f[2])!==0)return Number(f[1])/Number(f[2]);}
+  {const p=t.replace(/,/g,".").match(/^([+-]?)10\^?\(?([+-]?\d+)\)?$/);if(p&&/\^/.test(t))return (p[1]==="-"?-1:1)*Math.pow(10,Number(p[2]));}
+  t=t.replace(/[×x*·]10\^?/gi,"e").replace(/,/g,".");
   if(/^[+-]?\d+(\.\d+)?$/.test(t)||/^[+-]?\d*(\.\d+)?e[+-]?\d+$/i.test(t)){const v=Number(t);return isFinite(v)?v:null;}
   if(/^[+-]?\d+(\.\d+)?%$/.test(t))return Number(t.slice(0,-1));
   return null;}
@@ -183,7 +187,13 @@ function fillMatch(q,ans){
   if(typeof q.n==="number"){let v=parseNum(ans);
     if(v===null){const m=String(ans).trim().match(/^([+\-−]?\d[\d.,]*(?:\s*[×x*·]\s*10\^?\s*[+\-−]?\d+)?)\s*[a-zA-Zµμ°%\/²³·⁻¹ ]*$/);if(m)v=parseNum(m[1]);}
     if(v===null&&a in NUMW)v=NUMW[a];
-    if(v!==null){let t=q.n;if(q.abs){v=Math.abs(v);t=Math.abs(t);}const tol=(q.tol!=null?q.tol:0.01);return {ok:Math.abs(v-t)<=Math.max(Math.abs(t)*tol,1e-9),how:"num"};}
+    if(v!==null){let t=q.n;const tol=(q.tol!=null?q.tol:0.01);const near=x=>{if(q.abs){x=Math.abs(x);}const tt=q.abs?Math.abs(t):t;return Math.abs(x-tt)<=Math.max(Math.abs(tt)*tol,1e-9);};
+      const cands=[v];const raw=String(ans);
+      if(/%/.test(raw))cands.push(v/100);                       // "50%" per una frazione 0,5
+      if(/%/.test(q.q)&&Math.abs(v)<=1)cands.push(v*100);        // "0,5" o "1/2" quando si chiede una percentuale
+      if(/1\s*\/\s*……/.test(q.q)&&v>0&&v<1)cands.push(1/v);     // "1/8" quando si chiede il denominatore
+      if(/10\^\s*……/.test(q.q)&&v>0)cands.push(Math.log10(v));  // "10^-6" quando si chiede l'esponente
+      return {ok:cands.some(near),how:"num"};}
     if(q.c.every(c=>parseNum(c)!==null))return {ok:false};}
   const inp=cmp(ans);if(!inp)return {ok:false};
   const acc=new Set();q.c.forEach(c=>{const k=cmp(c);acc.add(k);(SYNI[k]||[]).forEach(i=>SYN[i].forEach(t=>acc.add(cmp(t))));});

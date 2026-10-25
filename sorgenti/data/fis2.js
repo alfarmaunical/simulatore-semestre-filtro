@@ -96,7 +96,7 @@ BANK.push(
 {id:"FC26",s:"fis",u:4,q:"Le onde sonore con frequenza superiore a 20 kHz si chiamano ……",c:["ultrasuoni","ultrasuono"],e:"In ecografia si usano ultrasuoni tra circa 2 e 15 MHz."},
 {id:"FC27",s:"fis",u:4,q:"Un'onda con periodo 0,02 s ha frequenza …… Hz",c:["50","cinquanta"],n:50,e:"f = 1/T = 1/0,02 = 50 Hz."},
 {id:"FC28",s:"fis",u:4,q:"Nelle onde stazionarie, i punti che restano sempre fermi si chiamano ……",c:["nodi","nodo"],e:"I punti di oscillazione massima si chiamano ventri."},
-{id:"FC29",s:"fis",u:5,q:"La temperatura di 0 K corrisponde a …… °C",c:["-273","-273,15","-273.15","−273,15","−273"],n:-273.15,tol:0.2,e:"T(°C) = T(K) − 273,15."},
+{id:"FC29",s:"fis",u:5,q:"La temperatura di 0 K corrisponde a …… °C",c:["-273","-273,15","-273.15","−273,15","−273"],n:-273.15,tol:0.002,e:"T(°C) = T(K) − 273,15."},
 {id:"FC30",s:"fis",u:5,q:"La quantità di calore necessaria per aumentare di 1 K la temperatura di 1 kg di una sostanza si chiama calore ……",c:["specifico"],e:"Per l'acqua vale circa 4186 J/(kg·K), cioè 1 kcal/(kg·K)."},
 {id:"FC31",s:"fis",u:5,q:"Una caloria equivale a circa …… J",c:["4,186","4.186","4,18","4.18","4,19","4.19","4,2","4.2"],n:4.186,tol:0.03,e:"1 cal = 4,186 J (equivalente meccanico del calore)."},
 {id:"FC32",s:"fis",u:5,q:"Una trasformazione termodinamica che avviene a pressione costante si chiama ……",c:["isobara","isobarica"],e:"Isocora: volume costante. Isoterma: temperatura costante. Adiabatica: senza scambio di calore."},

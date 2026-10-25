@@ -112,7 +112,7 @@ BANK.push(
 {id:"BC130",s:"bio",u:5,q:"Il passaggio di macromolecole attraverso una cellula epiteliale, dall'endocitosi su un lato all'esocitosi sull'altro, si chiama ……",c:["transcitosi"],e:"Esempio: le IgA secrete nelle mucose."},
 {id:"BC131",s:"bio",u:6,q:"Le proteine citoplasmatiche che collegano le caderine all'actina nelle giunzioni aderenti si chiamano ……",c:["catenine","catenina"],e:"Comprendono α-catenina, β-catenina e p120."},
 {id:"BC132",s:"bio",u:6,q:"La glicoproteina della lamina basale che lega integrine e collagene IV è la ……",c:["laminina"],e:"Ha una caratteristica forma a croce."},
-{id:"BC133",s:"bio",u:6,q:"Le proteine che inattivano le piccole GTPasi stimolando l'idrolisi del GTP si indicano con la sigla ……",c:["gap"],e:"GTPase Activating Proteins. Le GEF invece le attivano."},
+{id:"BC133",s:"bio",u:6,q:"Le proteine che inattivano le piccole GTPasi stimolando l'idrolisi del GTP si indicano con la sigla ……",c:["gap","gtpase activating protein","gtpase-activating protein"],e:"GTPase Activating Proteins. Le GEF invece le attivano."},
 {id:"BC134",s:"bio",u:6,q:"La proteina che collega le integrine ai filamenti di actina nelle adesioni focali, insieme alla vinculina, è la ……",c:["talina"],e:"La talina contribuisce anche all'attivazione delle integrine (segnalazione 'inside-out')."},
 {id:"BC135",s:"bio",u:6,q:"Il recettore dell'acetilcolina della giunzione neuromuscolare, che è un canale ionico, si chiama recettore ……",c:["nicotinico"],e:"I recettori muscarinici sono invece accoppiati a proteine G."},
 {id:"BC136",s:"bio",u:7,q:"Il complesso ciclina B-CDK1 è noto anche come fattore che promuove la mitosi, con la sigla ……",c:["mpf"],e:"Maturation (o M-phase) Promoting Factor."},

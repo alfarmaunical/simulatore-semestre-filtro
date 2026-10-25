@@ -38,7 +38,7 @@ BANK.push(
 {id:"BF037",s:"bio",u:3,q:"Il numero di codoni totali del codice genetico è ……",c:["64","sessantaquattro"],n:64,e:"4³ = 64."},
 {id:"BF038",s:"bio",u:3,q:"La proprietà per cui quasi tutti gli organismi usano lo stesso codice genetico si chiama ……",c:["universalita","universalità"],e:"Esistono piccole eccezioni, ad esempio nei mitocondri."},
 {id:"BF039",s:"bio",u:3,q:"L'organello formato da rRNA e proteine dove avviene la traduzione si chiama ……",c:["ribosoma","ribosomi"],e:"È formato da una subunità maggiore e una minore."},
-{id:"BF040",s:"bio",u:3,q:"Nella traduzione, il sito del ribosoma da cui esce il tRNA scarico è il sito ……",c:["e"],e:"A = amminoacil, P = peptidil, E = exit."},
+{id:"BF040",s:"bio",u:3,q:"Nella traduzione, il sito del ribosoma da cui esce il tRNA scarico è il sito ……",c:["e","exit","uscita"],e:"A = amminoacil, P = peptidil, E = exit."},
 {id:"BF041",s:"bio",u:3,q:"I fattori proteici che riconoscono i codoni di stop si chiamano fattori di ……",c:["rilascio","terminazione"],e:"Provocano il distacco della catena polipeptidica."},
 {id:"BF042",s:"bio",u:3,q:"La proteina che, legata al lattosio (allolattosio), si stacca dall'operatore dell'operone lac è il ……",c:["repressore","repressore lac","laci"],e:"È codificato dal gene lacI."},
 {id:"BF043",s:"bio",u:3,q:"Le proteine che aiutano altre proteine a ripiegarsi correttamente si chiamano ……",c:["chaperon","chaperoni","chaperone","chaperonine","proteine chaperon"],e:"Esempi: Hsp70, Hsp90, chaperonine."},

@@ -23,7 +23,7 @@ BANK.push(
 {id:"FF021",s:"fis",u:2,q:"L'accelerazione diretta verso il centro nel moto circolare uniforme si chiama accelerazione ……",c:["centripeta"],e:"a = v²/r = ω²·r."},
 {id:"FF022",s:"fis",u:2,q:"Un corpo che compie un giro completo in 0,25 s ha frequenza …… Hz",c:["4","quattro"],n:4,e:"f = 1/T."},
 {id:"FF023",s:"fis",u:2,q:"La velocità angolare si misura in …… al secondo",c:["radianti","rad","radiante"],e:"ω = 2π/T."},
-{id:"FF024",s:"fis",u:2,q:"Il principio secondo cui a ogni azione corrisponde una reazione uguale e contraria è il …… principio della dinamica.",c:["terzo","3"],e:"Le due forze agiscono su corpi diversi."},
+{id:"FF024",s:"fis",u:2,q:"Il principio secondo cui a ogni azione corrisponde una reazione uguale e contraria è il …… principio della dinamica.",c:["terzo","3","3°","iii"],e:"Le due forze agiscono su corpi diversi."},
 {id:"FF025",s:"fis",u:2,q:"La forza peso di un corpo di 5 kg (g = 9,8 m/s²) vale …… N",c:["49","quarantanove"],n:49,e:"P = m·g."},
 {id:"FF026",s:"fis",u:2,q:"La massa di un corpo che sulla Terra pesa 196 N (g = 9,8 m/s²) è …… kg",c:["20","venti"],n:20,e:"m = P/g."},
 {id:"FF027",s:"fis",u:2,q:"Una forza di 20 N imprime a un corpo un'accelerazione di 4 m/s². La massa del corpo è …… kg",c:["5","cinque"],n:5,e:"m = F/a."},
