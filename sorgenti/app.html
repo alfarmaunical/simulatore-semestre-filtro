@@ -94,6 +94,7 @@ const PRIVACY=`<p><b>Chi tratta i dati.</b> L'associazione studentesca ALFARMA (
 <p><b>Quali dati.</b> Solo se dai il consenso: il nome che inserisci, il tuo codice personale e i risultati delle simulazioni d'esame (materia, data, durata, punteggio, risposte esatte, errate e omesse, argomenti da rivedere). Le esercitazioni non vengono inviate.</p>
 <p><b>Perché.</b> Per la graduatoria generale, dove compare soltanto il codice e mai il nome, e per permettere all'associazione di seguire l'andamento degli studenti e organizzare attività di ripasso sugli argomenti più difficili.</p>
 <p><b>Base giuridica.</b> Il tuo consenso (art. 6, par. 1, lett. a del Regolamento UE 2016/679). È facoltativo: senza consenso il simulatore funziona allo stesso modo e i tuoi dati restano solo su questo dispositivo.</p>
+<p><b>Accedi con Google (facoltativo).</b> Se scegli di accedere, salviamo il tuo indirizzo email, il nome del tuo account Google e i tuoi progressi (storico delle prove, statistiche delle domande, codici personali creati) solo per ritrovarli su altri dispositivi. Non riceviamo la tua password né altri dati del tuo account Google. Puoi uscire quando vuoi e cancellare i dati salvati con «Elimina i dati salvati» nel riquadro dell'account.</p>
 <p><b>Dove e per quanto.</b> In un foglio di calcolo Google dell'associazione, accessibile solo ai suoi referenti. I dati sono cancellati entro il 31 marzo 2027.</p>
 <p><b>I tuoi diritti.</b> Puoi revocare il consenso in ogni momento dalla finestra che compare prima di ogni simulazione; per vedere, correggere o cancellare i dati già inviati scrivi all'associazione indicando il tuo codice. Puoi anche presentare reclamo al Garante per la protezione dei dati personali.</p>`;
 function enqueue(a,ex){if(!ONLINE||!a.pid)return;const p=P.pr[a.pid];if(!p||!p.ok)return;
@@ -118,7 +119,7 @@ function boardHTML(){const s=view.lb||"chem";const all=!!ONLINE&&view.lbScope!==
   h+=`<div class="tbl-wrap"><table class="hist lb-t"><thead><tr><th>#</th><th>Codice</th><th>Migliore</th><th>Media</th><th>Prove</th><th>Superate</th></tr></thead><tbody>`;
   rows.forEach((r,i)=>{h+=`<tr class="${r.code===ME?"me":""}"><td><span class="pos p${i+1}">${i+1}</span></td><td class="mono"><b>${esc(r.code)}</b>${r.code===ME?` <span class="pill neutral">tu</span>`:""}</td><td class="mono"><b>${fmt(r.best)}</b>/31</td><td class="mono">${fmt(r.avg)}</td><td class="mono">${r.n}</td><td class="mono">${r.pass}/${r.n}</td></tr>`;});
   return h+`</tbody></table></div></section>`;}
-function save(){lsSet(LKEY,P);if(!cloud)return;clearTimeout(saveTimer);saveTimer=setTimeout(async()=>{
+function save(){lsSet(LKEY,P);queuePush();if(!cloud)return;clearTimeout(saveTimer);saveTimer=setTimeout(async()=>{
   try{await db.doc("data/users/"+uid+"/progress").set(JSON.parse(JSON.stringify(P)));}catch(e){if(e&&(e.code==="invalid_argument"||e.code==="revoked"||e.code==="not_granted")){cloud=false;renderSyncBadge();}}},1200);}
 async function initCloud(){
   try{
@@ -133,8 +134,45 @@ async function initCloud(){
     save();
   }catch(e){cloud=false;renderSyncBadge();}
 }
-function renderSyncBadge(){const el=document.getElementById("sync");if(el)el.innerHTML=syncHTML();}
-function syncHTML(){return cloud?'<span class="dot on"></span>Progressi salvati sul tuo account (anche da telefono)':'<span class="dot"></span>Progressi salvati in questo browser';}
+function renderSyncBadge(){const el=document.getElementById("sync");if(el){el.innerHTML=syncHTML();drawGBtn();}}
+function syncHTML(){
+  if(cloud)return '<span class="dot on"></span>Progressi salvati sul tuo account (anche da telefono)';
+  if(GLOGIN&&ACC)return `<span class="dot on"></span><span>Progressi salvati sull'account <b>${esc(ACC.email)}</b>, anche da altri dispositivi</span><button class="linkish" data-act="acctMenu">Account</button>`;
+  if(GLOGIN)return `<span class="dot"></span><span>${acctBusy?"Accesso in corso…":"Progressi salvati solo in questo browser"}</span>`;
+  return '<span class="dot"></span>Progressi salvati in questo browser';}
+/* ------------------------------------------------------------------ ACCEDI CON GOOGLE */
+const AKEY="sf-sim-acct-v1";let ACC=lsGet(AKEY);
+const GLOGIN=!!(ONLINE&&typeof GOOGLE_CLIENT_ID!=="undefined"&&GOOGLE_CLIENT_ID&&location.protocol==="https:");
+let gisReady=false,acctBusy=false,acctMsg="",pushT=null;
+function api(b){return fetch(SHEET_URL,{method:"POST",headers:{"Content-Type":"text/plain;charset=utf-8"},body:JSON.stringify(b)}).then(r=>r.json());}
+function loadGIS(){if(!GLOGIN||ACC||gisReady)return;if(window.google&&google.accounts&&google.accounts.id){initGIS();return;}
+  if(document.getElementById("gis-js"))return;const sc=document.createElement("script");sc.id="gis-js";sc.src="https://accounts.google.com/gsi/client";sc.async=true;sc.onload=initGIS;document.head.appendChild(sc);}
+function initGIS(){try{google.accounts.id.initialize({client_id:GOOGLE_CLIENT_ID,callback:onGoogle,ux_mode:"popup",auto_select:false,cancel_on_tap_outside:true,itp_support:true});gisReady=true;drawGBtn();}catch(e){}}
+function drawGBtn(){if(!gisReady||ACC)return;document.querySelectorAll(".gbtn").forEach(el=>{if(el.childElementCount)return;
+  google.accounts.id.renderButton(el,{theme:"filled_blue",size:"large",text:"signin_with",shape:"pill",locale:"it"});});}
+function loginCardHTML(){if(!GLOGIN||ACC||cloud)return "";
+  return `<section class="panel login-card"><div><h3>Salva i tuoi progressi</h3><p class="muted small">${acctBusy?"Accesso in corso…":acctMsg?esc(acctMsg):"Accedi con Google per non perdere simulazioni, errori e statistiche, e ritrovarli su telefono, tablet e computer."} <button class="linkish" data-act="privacy">Privacy</button></p></div><div class="gbtn"></div></section>`;}
+async function onGoogle(r){acctBusy=true;acctMsg="";if(view.name==="home")render();
+  try{const j=await api({act:"login",idt:r.credential});if(!j||!j.ok)throw 0;
+    ACC={tok:j.tok,email:j.email,name:j.name};lsSet(AKEY,ACC);
+    if(j.p){P=mergeP(P,j.p);P.pr=P.pr||{};lsSet(LKEY,P);}
+    acctBusy=false;await pushAcct();}
+  catch(e){acctMsg="Accesso non riuscito: controlla la connessione e riprova.";}
+  acctBusy=false;if(view.name==="home")render();else renderSyncBadge();}
+function adoptP(p){if(!p)return;P=mergeP(P,p);P.pr=P.pr||{};lsSet(LKEY,P);}
+async function pullAcct(){if(!GLOGIN||!ACC)return;
+  try{const j=await api({act:"load",tok:ACC.tok});if(j.err==="auth"){logoutLocal("Sessione scaduta: accedi di nuovo per ritrovare i progressi.");return;}
+    if(j.ok)adoptP(j.p);await pushAcct();if(view.name==="home")render();}catch(e){}}
+function queuePush(){if(!GLOGIN||!ACC)return;clearTimeout(pushT);pushT=setTimeout(pushAcct,1500);}
+async function pushAcct(){if(!GLOGIN||!ACC)return;
+  try{const j=await api({act:"save",tok:ACC.tok,p:P});if(j.err==="auth"){logoutLocal("Sessione scaduta: accedi di nuovo per ritrovare i progressi.");return;}
+    if(j.ok&&j.p){adoptP(j.p);renderSyncBadge();}}catch(e){}}
+function logoutLocal(msg){ACC=null;lsSet(AKEY,null);acctMsg=msg||"";view.acct=false;if(window.google&&google.accounts&&google.accounts.id)google.accounts.id.disableAutoSelect();render();loadGIS();}
+function acctHTML(){if(!view.acct||!ACC)return "";
+  return `<div class="confirm acct"><b>Il tuo account</b><p>Hai effettuato l'accesso come <b>${esc(ACC.email)}</b>. Storico, statistiche delle domande e codici personali vengono salvati sull'account e uniti a quelli degli altri dispositivi da cui accedi.</p>
+  ${view.acctDel?`<p><b>Eliminare i progressi salvati sull'account?</b> Su questo dispositivo restano, ma non saranno più disponibili sugli altri.</p><div class="row"><button class="btn danger" data-act="acctDelYes">Sì, elimina</button><button class="btn ghost" data-act="acctDelNo">Annulla</button></div>`
+  :`<div class="row"><button class="btn" data-act="acctOut">Esci da questo dispositivo</button><button class="btn ghost" data-act="acctDel">Elimina i dati salvati</button><button class="btn ghost" data-act="acctClose">Chiudi</button></div>`}</div>`;}
+
 
 /* ------------------------------------------------------------------ utils */
 const $=s=>document.querySelector(s);
@@ -278,6 +316,7 @@ function homeHTML(){
     <p class="sync" id="sync">${syncHTML()}</p>
   </div></header>
   <div class="wrap stack">`;
+  h+=acctHTML()+loginCardHTML();
   if(draft&&draft.items){h+=`<div class="confirm"><b>Hai una simulazione di ${esc(sname(draft.s))} lasciata a metà.</b><div class="row"><button class="btn primary" data-act="resume">Riprendi</button><button class="btn ghost" data-act="discard">Scarta</button></div></div>`;}
   h+=`<section class="subjects">`;
   ORDER.forEach(s=>{const st=subjStats(s);const errs=errorPool(s).length;const mcN=BY[s].filter(q=>q.t==="mc").length,fN=BY[s].length-mcN;
@@ -460,7 +499,7 @@ function practiceHTML(){
 
 /* ------------------------------------------------------------------ RENDER + EVENTS */
 function render(){const app=$("#app");if(view.name==="home")loadGB();
-  if(view.name==="home")app.innerHTML=homeHTML();
+  if(view.name==="home"){app.innerHTML=homeHTML();drawGBtn();}
   else if(view.name==="exam"){app.innerHTML=examHTML();if(view.ex.timed&&!view.ex.submitted){clearInterval(tick);tick=setInterval(()=>{const left=examLeft(view.ex);const t=$("#timer");if(t){t.textContent=fmtTime(left);t.classList.toggle("low",left<5*60000);}if(left<=0){clearInterval(tick);submitExam();}},500);}
     const inp=document.querySelector(".fill input:not([disabled])");if(inp){inp.addEventListener("input",()=>{readFill();persistDraft();updateCounter();});inp.addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();act(view.ex.mode==="exam"||view.ex.items[view.ex.cur].checked?"next":"check");}});}}
   else if(view.name==="result")app.innerHTML=resultHTML();
@@ -482,6 +521,12 @@ function act(a,d){d=d||{};
   case "whoPrivacy":view.who={step:"privacy",back:view.who};renderWho();break;
   case "privacy":view.who={step:"privacy"};renderWho();break;
   case "whoConsent":if(ME&&P.pr[ME]){P.pr[ME].ok=!P.pr[ME].ok;save();}break;
+  case "acctMenu":view.acct=!view.acct;view.acctDel=false;render();break;
+  case "acctClose":view.acct=false;render();break;
+  case "acctOut":logoutLocal("Sei uscito. I progressi restano su questo dispositivo e sul tuo account.");break;
+  case "acctDel":view.acctDel=true;render();break;
+  case "acctDelNo":view.acctDel=false;render();break;
+  case "acctDelYes":{const t=ACC&&ACC.tok;view.acctDel=false;api({act:"delete",tok:t}).then(j=>logoutLocal(j&&j.ok?"Dati eliminati dal server. Su questo dispositivo restano.":"Non è stato possibile eliminare i dati: riprova più tardi.")).catch(()=>{acctMsg="Non è stato possibile eliminare i dati: riprova più tardi.";render();});break;}
   case "lbScope":view.lbScope=d.v;render();break;
   case "lb":view.lb=d.s;render();break;
   case "resume":{const dr=lsGet(DKEY);if(dr){go({name:"exam",ex:dr});}break;}
@@ -521,6 +566,6 @@ document.addEventListener("keydown",e=>{if(view.who){if(e.key==="Escape"){view.w
 window.addEventListener("pagehide",()=>{if(view.name==="exam"){readFill();persistDraft();}});
 
 window.__sim={fillMatch,TP,TOPICS,BANK,checkFill,parseNum,norm,buildExam,EXAM,P:()=>P};
-render();initCloud();flush();
+render();initCloud();flush();loadGIS();pullAcct();if(location.hash==="#privacy"){view.who={step:"privacy"};renderWho();}
 })();
 </script>
