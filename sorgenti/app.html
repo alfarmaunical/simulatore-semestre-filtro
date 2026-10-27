@@ -340,6 +340,7 @@ function homeHTML(){
       </div></div></article>`;});
   h+=`</section>`;
   h+=boardHTML();
+  h+=gapsSummaryHTML();
   const hist=P.attempts.slice().reverse().slice(0,15);
   h+=`<section class="panel stack"><div class="row" style="justify-content:space-between"><h2>Storico</h2>${P.attempts.length?`<button class="btn ghost small" data-act="askreset">Azzera progressi</button>`:""}</div>`;
   if(view.confirmReset){h+=`<div class="confirm"><b>Cancellare tutto lo storico e le statistiche delle domande?</b><div class="row"><button class="btn danger" data-act="reset">Sì, azzera</button><button class="btn ghost" data-act="noreset">Annulla</button></div></div>`;}
@@ -375,6 +376,7 @@ function examHTML(){
   if(ex.confirm){const om=n-answered;h+=`<div class="confirm" role="alertdialog"><b>${isPractice?"Terminare l'esercitazione?":"Consegnare la prova?"}</b><p>${om?`Hai ${om} domand${om===1?"a":"e"} senza risposta: ${isPractice?"non verranno conteggiate.":"varranno 0 punti."}`:"Hai risposto a tutte le domande."}</p><div class="row"><button class="btn primary" data-act="submit">${isPractice?"Termina e vedi il riepilogo":"Consegna"}</button><button class="btn ghost" data-act="cancelSubmit">Torna alle domande</button></div></div>`;}
   h+=`<article class="qcard"><div class="qmeta"><span class="eyebrow">${q.t==="mc"?"Risposta multipla":"Completamento"} · ${esc(SUBJ[ex.s].units[q.u])}</span>${!isPractice?`<button class="btn ghost small" data-act="flag" aria-pressed="${it.flag}">${it.flag?"★ Segnata":"☆ Segna per dopo"}</button>`:""}</div>
     <p class="qtext"><span class="num">${ex.cur+1}.</span>${esc(q.q)}</p>`;
+  if(isPractice&&q.h&&!revealed)h+=it.hint?`<div class="hint" role="note"><b>Indizio</b> ${esc(q.h)}</div>`:`<div><button class="btn ghost small hint-btn" data-act="hint">💡 Mostra indizio / formula</button></div>`;
   if(q.t==="mc"){h+=`<div class="opts" role="radiogroup">`;it.ord.forEach((oi,k)=>{let cls="";if(revealed){if(oi===0)cls="correct";else if(it.ans===oi)cls="wrong";}else if(it.ans===oi)cls="sel";
       h+=`<button class="opt ${cls}" role="radio" aria-checked="${it.ans===oi}" data-act="choose" data-o="${oi}" ${revealed?"disabled":""}><span class="let">${LET[k]}</span><span>${esc(q.o[oi])}</span></button>`;});h+=`</div>`;
     if(!isPractice&&it.ans!=null)h+=`<div><button class="btn ghost small" data-act="clear">Togli la risposta</button></div>`;}
@@ -382,7 +384,7 @@ function examHTML(){
     h+=`<div class="fill"><input id="fill-${esc(it.id)}" type="text" inputmode="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Scrivi la parola o il numero mancante" value="${esc(it.ans||"")}" class="${cls}" ${revealed?"disabled":""} aria-label="Risposta"></div>
     <p class="note">Scrivi una sola parola o un numero, senza unità di misura se è già indicata nel testo. Per i decimali puoi usare la virgola. Sono accettati sinonimi, singolare e plurale e piccoli errori di battitura.</p>`;}
   if(revealed){let head;if(q.t==="mc")head=it.ans==null?"Nessuna risposta.":(it.ans===0?"Esatto.":"Sbagliato.");else head=it.ok===null?"Nessuna risposta.":(it.ok?(it.how==="typo"?"Esatto, ma attenzione all'ortografia.":"Esatto."):"Sbagliato.");
-    h+=`<div class="explain"><b>${head}</b> ${q.t==="fill"?`${it.how==="typo"?"Si scrive":"Risposta attesa:"} <b>${esc(q.c[0])}</b>${q.c.length>1&&it.how!=="typo"?` (accettati anche: ${q.c.slice(1,4).map(esc).join(", ")})`:""}. `:""}${esc(q.e)}</div>`;}
+    h+=`<div class="explain"><b>${head}</b> ${q.t==="fill"?`${it.how==="typo"?"Si scrive":"Risposta attesa:"} <b>${esc(q.c[0])}</b>${q.c.length>1&&it.how!=="typo"?` (accettati anche: ${q.c.slice(1,4).map(esc).join(", ")})`:""}. `:""}${esc(q.e)}${exclHTML(q)}</div>`;}
   h+=`<div class="qfoot"><button class="btn" data-act="prev" ${ex.cur===0?"disabled":""}>← Precedente</button>`;
   if(isPractice&&!revealed)h+=`<button class="btn primary" data-act="check">Verifica</button>`;
   h+=`<button class="btn ${isPractice&&revealed?"primary":""}" data-act="next">${ex.cur===n-1?(isPractice?"Riepilogo":"Fine"):"Successiva →"}</button></div></article>`;
@@ -393,6 +395,7 @@ function examHTML(){
   h+=`</div>${!isPractice?`<p class="note">Le domande con il pallino giallo sono segnate per un secondo controllo. Puoi cambiare risposta fino alla consegna.</p>`:""}</section>
   <div class="row"><button class="btn ghost" data-act="quit">${isPractice?"Esci senza salvare":"Abbandona la simulazione"}</button></div></div>`;
   return h;}
+function exclHTML(q){return q.x?`<span class="excl"><b>Per esclusione:</b> ${esc(q.x)}</span>`:"";}
 function persistDraft(){if(view.name==="exam"&&view.ex.mode==="exam"&&!view.ex.submitted)lsSet(DKEY,view.ex);}
 function readFill(){const ex=view.ex;const it=ex.items[ex.cur];const q=QI[it.id];if(q.t!=="fill")return;const el=document.getElementById("fill-"+it.id);if(el&&!el.disabled){const v=el.value.trim();it.ans=v===""?null:v;}}
 function checkItem(it){const q=QI[it.id];if(q.t==="mc")it.ok=it.ans==null?null:it.ans===0;else{const r=fillMatch(q,it.ans);it.ok=r.ok;it.how=r.how||null;}}
@@ -434,7 +437,7 @@ function resultHTML(){
     if(q.t==="mc"){const L=oi=>LET[it.ord.indexOf(oi)];your=it.ans==null?"<i>nessuna</i>":`<b>${L(it.ans)})</b> ${esc(q.o[it.ans])}`;right=`<b>${L(0)})</b> ${esc(q.o[0])}`;}
     else{your=it.ans==null?"<i>nessuna</i>":`<b>${esc(it.ans)}</b>`;right=`<b>${esc(q.c[0])}</b>`;}
     h+=`<article class="review-item ${st}"><div class="qmeta"><span class="eyebrow">${i+1} · ${esc(SUBJ[s].units[q.u])}</span><span class="pill ${st==="ok"?"ok":st==="bad"?"bad":"neutral"}">${st==="ok"?"+1":st==="bad"?(isExam?"−0,1":"errata"):"0"}</span></div>
-      <p>${esc(q.q)}</p><p class="ans-line">La tua risposta: ${your}</p>${st!=="ok"?`<p class="ans-line">Risposta corretta: ${right}</p>`:""}${st==="ok"&&it.how==="typo"?`<p class="ans-line">Accettata nonostante un errore di battitura: si scrive ${right}</p>`:""}<div class="explain">${esc(q.e)}</div></article>`;});
+      <p>${esc(q.q)}</p><p class="ans-line">La tua risposta: ${your}</p>${st!=="ok"?`<p class="ans-line">Risposta corretta: ${right}</p>`:""}${st==="ok"&&it.how==="typo"?`<p class="ans-line">Accettata nonostante un errore di battitura: si scrive ${right}</p>`:""}<div class="explain">${esc(q.e)}${exclHTML(q)}</div></article>`;});
   h+=`</section><div class="row"><button class="btn primary" data-act="${isExam?(a.hard?"examHard":"exam"):"practice"}" data-s="${s}">${isExam?(a.hard?"Nuova simulazione difficile":"Nuova simulazione"):"Nuova esercitazione"}</button><button class="btn" data-act="home">Torna alle materie</button></div></div>`;
   return h;}
 
@@ -483,6 +486,39 @@ function planHTML(ex,a){
   const rec=Object.values(TP).filter(t=>t.s===s&&!shown.has(t.id)).map(t=>({t,h:topicHist(t.id)})).filter(x=>x.h.r+x.h.w>=5&&x.h.r/(x.h.r+x.h.w)<0.6).sort((x,y)=>x.h.r/(x.h.r+x.h.w)-y.h.r/(y.h.r+y.h.w)).slice(0,4);
   if(rec.length)h+=`<div class="stack" style="gap:8px"><h4>Punti deboli ricorrenti nelle prove precedenti</h4>${rec.map(x=>`<div class="rec-row"><span><b>${esc(x.t.n)}</b> <small class="muted">${pct(x.h.r,x.h.r+x.h.w)}% esatte su ${x.h.r+x.h.w} risposte · metodo: ${esc(TECH[x.t.t].n)}</small></span><button class="btn ghost small" data-act="practiceTopic" data-s="${s}" data-tp="${x.t.id}">Esercitati</button></div>`).join("")}</div>`;
   return h+`</section>`;}
+
+/* ------------------------------------------------------------------ LE MIE LACUNE */
+// media di tutti gli errori fatti nel tempo (simulazioni, esercitazioni e ripasso) per argomento
+function gapTopics(s){const out=[];Object.values(TP).forEach(t=>{if(s!=="all"&&t.s!==s)return;const h=topicHist(t.id);const n=h.r+h.w;if(n<3)return;
+    out.push({t,r:h.r,w:h.w,n,pc:pct(h.r,n),sc:(h.w+1)/(n+2)});});
+  return out.filter(x=>x.w>0).sort((a,b)=>b.sc-a.sc||b.w-a.w);}
+function answeredTot(s){let r=0,w=0;Object.entries(P.qs).forEach(([id,st])=>{const q=QI[id];if(!q||(s!=="all"&&q.s!==s))return;r+=st[2];w+=st[1];});return {r,w};}
+function gapsSummaryHTML(){const g=gapTopics("all");const tot=answeredTot("all");
+  let h=`<section class="panel stack gaps-sum"><div class="row" style="justify-content:space-between"><div><h2>Le mie lacune</h2><p class="muted small" style="margin:0">Gli argomenti in cui sbagli più spesso, calcolati su tutte le simulazioni ed esercitazioni fatte finora.</p></div>${g.length?`<button class="btn primary" data-act="gaps">Apri Le mie lacune</button>`:""}</div>`;
+  if(!g.length)return h+`<p class="muted">${tot.r+tot.w?"Per ora nessun argomento con errori ricorrenti: servono almeno 3 risposte sullo stesso argomento.":"Fai qualche simulazione o esercitazione: qui comparirà la classifica dei tuoi punti deboli, con cosa ripassare."}</p></section>`;
+  h+=`<div class="gap-mini">${g.slice(0,3).map((x,i)=>`<button class="gap-chip ${SUBJ[x.t.s].cls}" data-act="gaps" data-s="${x.t.s}"><span class="rank">${i+1}</span><span><b>${esc(x.t.n)}</b><small>${esc(sname(x.t.s))} · ${x.pc}% esatte su ${x.n}</small></span></button>`).join("")}</div>`;
+  return h+`</section>`;}
+function gapsHTML(){const s=view.gs||"all";const g=gapTopics(s);const tot=answeredTot(s);
+  let h=`<div class="wrap stack ${s!=="all"?SUBJ[s].cls:"gaps-all"}"><div><button class="btn ghost back" data-act="home">← Torna alle materie</button></div>
+  <header class="page-head stack" style="gap:6px"><p class="eyebrow">Statistiche su tutte le prove fatte finora</p><h1>Le mie lacune</h1>
+  <p class="lead-p">Ogni argomento è ordinato in base a quanto spesso sbagli. Per ciascuno trovi cosa ripassare, il metodo di studio più adatto e un'esercitazione mirata. Le statistiche si aggiornano a ogni prova${GLOGIN&&ACC?" e sono salvate sul tuo account":""}.</p></header>
+  <div class="seg scroll" role="group" aria-label="Materia"><button data-act="gapsSubj" data-s="all" aria-pressed="${s==="all"}">Tutte</button>${ORDER.map(x=>`<button data-act="gapsSubj" data-s="${x}" aria-pressed="${x===s}">${esc(sname(x))}</button>`).join("")}</div>`;
+  if(tot.r+tot.w)h+=`<p class="muted small">Risposte date finora: <b>${tot.r+tot.w}</b> · esatte ${pct(tot.r,tot.r+tot.w)}%.</p>`;
+  if(!g.length){h+=`<section class="panel"><p class="muted">${tot.r+tot.w?"Nessun argomento con errori ricorrenti: servono almeno 3 risposte sullo stesso argomento. Continua così!":"Ancora nessuna risposta registrata. Fai una simulazione o un'esercitazione e torna qui."}</p></section></div>`;return h;}
+  h+=`<div class="topic-list">`;
+  g.slice(0,15).forEach((x,k)=>{const tp=x.t,te=TECH[tp.t];const cls=x.pc<50?"bad":x.pc<75?"mid":"ok";
+    h+=`<details class="topic-card gap ${SUBJ[tp.s].cls}" ${k<3?"open":""}><summary><span class="rank">${k+1}</span><div class="gap-head"><b>${esc(tp.n)}</b><small>${esc(sname(tp.s))} · ${esc(SUBJ[tp.s].units[tp.u])}</small></div>
+      <div class="gap-meter ${cls}"><span>${x.pc}%</span><div class="bar-track"><div class="bar-fill" style="width:${x.pc}%"></div></div><small>${x.w} errori su ${x.n}</small></div></summary>
+      <div class="tcols"><div><h4>Cosa rivedere</h4><ul>${tp.r.map(y=>`<li>${esc(y)}</li>`).join("")}</ul></div>
+      <div class="tech"><h4>Come studiarlo · ${esc(te.n)}</h4><p>${esc(te.d)}</p></div></div>
+      ${(()=>{const ws=BY[tp.s].filter(q=>q.tp===tp.id&&qstat(q.id)[1]>0).sort((a,b)=>qstat(b.id)[1]-qstat(a.id)[1]).slice(0,2);
+        return ws.length?`<div class="gap-q"><h4>Domande che hai sbagliato</h4>${ws.map(q=>`<div class="gap-qi"><p>${esc(q.q)}</p><p class="ans-line">Risposta corretta: <b>${esc(q.c?q.c[0]:q.o[0])}</b></p><p class="muted small">${esc(q.e)}</p></div>`).join("")}</div>`:"";})()}
+      <div class="row"><button class="btn small" data-act="practiceTopic" data-s="${tp.s}" data-tp="${tp.id}">Esercitati su questo argomento (${Math.min(15,BY[tp.s].filter(q=>q.tp===tp.id).length)} domande)</button></div></details>`;});
+  h+=`</div>`;
+  if(g.length>15)h+=`<p class="muted small">Altri argomenti con qualche errore: ${g.slice(15,30).map(x=>esc(x.t.n)).join(" · ")}.</p>`;
+  const subs=s==="all"?ORDER:[s];const er=subs.filter(x=>errorPool(x).length);
+  if(er.length)h+=`<section class="panel stack"><h3>Ripassa le domande sbagliate</h3><p class="muted small">Un'esercitazione con le domande che hai sbagliato più volte di quante le hai indovinate.</p><div class="row">${er.map(x=>`<button class="btn" data-act="errors" data-s="${x}">Ripasso errori di ${esc(sname(x))} (${errorPool(x).length})</button>`).join("")}</div></section>`;
+  return h+`</div>`;}
 /* ------------------------------------------------------------------ PRACTICE SETUP */
 function practiceHTML(){
   const s=view.s;const sel=view.units;
@@ -503,7 +539,8 @@ function render(){const app=$("#app");if(view.name==="home")loadGB();
   else if(view.name==="exam"){app.innerHTML=examHTML();if(view.ex.timed&&!view.ex.submitted){clearInterval(tick);tick=setInterval(()=>{const left=examLeft(view.ex);const t=$("#timer");if(t){t.textContent=fmtTime(left);t.classList.toggle("low",left<5*60000);}if(left<=0){clearInterval(tick);submitExam();}},500);}
     const inp=document.querySelector(".fill input:not([disabled])");if(inp){inp.addEventListener("input",()=>{readFill();persistDraft();updateCounter();});inp.addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();act(view.ex.mode==="exam"||view.ex.items[view.ex.cur].checked?"next":"check");}});}}
   else if(view.name==="result")app.innerHTML=resultHTML();
-  else if(view.name==="practice")app.innerHTML=practiceHTML();}
+  else if(view.name==="practice")app.innerHTML=practiceHTML();
+  else if(view.name==="gaps")app.innerHTML=gapsHTML();}
 function updateCounter(){const ex=view.ex;const el=document.querySelector(".progress-txt");if(!el)return;const n=ex.items.length,answered=ex.items.filter(x=>x.ans!=null&&x.ans!=="").length;el.textContent=el.textContent.replace(/\d+\/\d+ risposte/,answered+"/"+n+" risposte");const cell=document.querySelector(`.nav-cell[data-i="${ex.cur}"]`);if(cell&&ex.mode==="exam")cell.classList.toggle("ans",ex.items[ex.cur].ans!=null);}
 
 function act(a,d){d=d||{};
@@ -527,6 +564,8 @@ function act(a,d){d=d||{};
   case "acctDel":view.acctDel=true;render();break;
   case "acctDelNo":view.acctDel=false;render();break;
   case "acctDelYes":{const t=ACC&&ACC.tok;view.acctDel=false;api({act:"delete",tok:t}).then(j=>logoutLocal(j&&j.ok?"Dati eliminati dal server. Su questo dispositivo restano.":"Non è stato possibile eliminare i dati: riprova più tardi.")).catch(()=>{acctMsg="Non è stato possibile eliminare i dati: riprova più tardi.";render();});break;}
+  case "gaps":go({name:"gaps",gs:d.s||"all"});break;
+  case "gapsSubj":view.gs=d.s;render();break;
   case "lbScope":view.lbScope=d.v;render();break;
   case "lb":view.lb=d.s;render();break;
   case "resume":{const dr=lsGet(DKEY);if(dr){go({name:"exam",ex:dr});}break;}
@@ -542,6 +581,7 @@ function act(a,d){d=d||{};
   case "choose":{const it=ex.items[ex.cur];const o=+d.o;it.ans=(ex.mode==="exam"&&it.ans===o)?null:o;persistDraft();render();break;}
   case "clear":ex.items[ex.cur].ans=null;persistDraft();render();break;
   case "flag":ex.items[ex.cur].flag=!ex.items[ex.cur].flag;persistDraft();render();break;
+  case "hint":ex.items[ex.cur].hint=true;render();break;
   case "check":{readFill();const it=ex.items[ex.cur];checkItem(it);it.checked=true;render();break;}
   case "prev":readFill();if(ex.cur>0){ex.cur--;persistDraft();render();}break;
   case "next":readFill();if(ex.mode!=="exam"&&!ex.items[ex.cur].checked&&ex.items[ex.cur].ans!=null){const it=ex.items[ex.cur];checkItem(it);it.checked=true;render();break;}

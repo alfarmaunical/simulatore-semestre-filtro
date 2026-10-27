@@ -267,3 +267,28 @@ div.privacy.small{max-height:30vh;padding:12px;border-radius:12px;background:var
 .maplink{display:inline-flex;align-items:center;gap:4px;white-space:nowrap}
 
 .login-card{display:flex;gap:14px 20px;align-items:center;justify-content:space-between;flex-wrap:wrap;padding:16px 20px}.login-card h3{margin:0 0 4px}.login-card p{margin:0;max-width:56ch}
+
+/* indizio e per esclusione */
+.hint{background:color-mix(in srgb,var(--accent) 9%,transparent);border:1px solid color-mix(in srgb,var(--accent) 30%,transparent);border-radius:12px;padding:10px 14px;font-size:15px;line-height:1.5}
+.hint b{display:block;font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--accent);margin-bottom:2px}
+.excl{display:block;margin-top:8px;padding-top:8px;border-top:1px dashed color-mix(in srgb,currentColor 25%,transparent)}
+/* le mie lacune */
+.gap-mini{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px}
+.gap-chip{display:flex;gap:10px;align-items:center;text-align:left;border:1px solid var(--line);background:var(--paper);border-radius:14px;padding:10px 12px;cursor:pointer;font:inherit;color:inherit}
+.gap-chip:hover{border-color:var(--accent)}
+.gap-chip small{display:block;color:var(--muted);font-size:12px}
+.gap-chip .rank,.topic-card.gap .rank{flex:none}
+details.topic-card.gap>summary{list-style:none;display:grid;grid-template-columns:auto 1fr auto;gap:12px;align-items:center;cursor:pointer}
+details.topic-card.gap>summary::-webkit-details-marker{display:none}
+.gap-head small{display:block;color:var(--muted);font-size:12.5px}
+.gap-meter{display:grid;grid-template-columns:auto 90px;gap:2px 8px;align-items:center;font-size:13px;min-width:150px}
+.gap-meter>span{font-weight:700;font-family:var(--mono,ui-monospace,monospace)}
+.gap-meter small{grid-column:1/-1;color:var(--muted);font-size:11.5px;text-align:right}
+.gap-meter.bad .bar-fill{background:var(--bad)}.gap-meter.mid .bar-fill{background:var(--warn)}.gap-meter.ok .bar-fill{background:var(--ok)}
+details.topic-card.gap[open]>summary{margin-bottom:12px}
+.gap-q{display:grid;gap:8px}.gap-q h4{margin:0}
+.gap-qi{border-left:3px solid var(--bad);padding:4px 0 4px 10px}.gap-qi p{margin:2px 0}
+@media (max-width:620px){details.topic-card.gap>summary{grid-template-columns:auto 1fr}.gap-meter{grid-column:1/-1;grid-template-columns:auto 1fr}}
+.page-head .lead-p{color:rgba(255,255,255,.88);margin:0;max-width:70ch}
+.wrap.gaps-all .page-head{--sc:var(--accent)}
+.seg.scroll{flex-wrap:nowrap;overflow-x:auto;max-width:100%}.seg.scroll button{flex:none}
