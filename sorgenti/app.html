@@ -41,7 +41,7 @@ function classify(q){const L=(TOPICS[q.s]||{})[q.u]||[];const main=q.q+" "+(q.c?
 BANK.forEach(q=>{q.tp=classify(q);});
 
 /* ------------------------------------------------------------------ storage */
-const LKEY="sf-sim-v1",DKEY="sf-sim-draft-v1";
+const LKEY="sf-sim-v1",DKEY="sf-sim-draft-v1",YKEY="sf-sim-day-v1",PKEY="sf-sim-dayprefs-v1";
 let P={attempts:[],qs:{},v:1};      // progress
 let db=null,uid=null,cloud=false,saveTimer=null;
 function lsGet(k){try{const r=localStorage.getItem(k);return r?JSON.parse(r):null}catch(e){return null}}
@@ -65,7 +65,7 @@ function setMe(c){ME=c;lsSet(CKEY,c);}
 function newCode(){const A="ACDEFHJKLMNPRTUVWXY3479";let c;do{c="AF-";for(let i=0;i<4;i++)c+=A[Math.floor(Math.random()*A.length)];}while(P.pr[c]);return c;}
 function whoCreate(){const i=$("#who-n");const n=(i&&i.value||"").trim().replace(/\s+/g," ").slice(0,40);if(!n){if(i){i.focus();i.classList.add("bad");}return;}
   const ok=!!($("#who-ok")&&$("#who-ok").checked);const c=newCode();P.pr[c]={n,t:Date.now(),ok};setMe(c);save();view.who.step="code";view.who.code=c;renderWho();}
-function whoHTML(){const w=view.who;if(!w)return "";const S=w.s?esc(SUBJ[w.s].name)+(w.next==="examHard"?" · difficile":""):"";let b;
+function whoHTML(){const w=view.who;if(!w)return "";const S=w.next==="day"?"Simulazione stile esame · "+w.prefs.subs.map(sname).map(esc).join(", "):w.s?esc(SUBJ[w.s].name)+(w.next==="examHard"?" · difficile":""):"";let b;
   if(w.step==="confirm"){const p=P.pr[ME];b=`<p>Stai per iniziare la simulazione come:</p><div class="who-me"><b>${esc(p.n)}</b><span class="code">${esc(ME)}</span></div>
     ${ONLINE?`<label class="consent"><input type="checkbox" data-act="whoConsent" ${p.ok?"checked":""}><span>Invia i miei risultati all'associazione ALFARMA e partecipa alla graduatoria generale (<button class="linkish" data-act="whoPrivacy">informativa</button>)</span></label>`:""}
     <div class="row"><button class="btn primary" data-act="whoGo">Sì, inizia</button><button class="btn" data-act="whoOther">Sono un'altra persona</button></div>`;}
@@ -85,7 +85,7 @@ function renderWho(){let el=document.getElementById("who-root");if(!el){el=docum
   const i=$("#who-n");if(i){if(keep.n)i.value=keep.n;i.focus();}const c=$("#who-ok");if(c&&keep.ok)c.checked=true;if(!view.who&&view.name==="home")render();}
 
 /* ------------------------------------------------------------------ GRADUATORIA */
-function board(s){const g={};P.attempts.forEach(a=>{if(a.s!==s||a.mode!=="exam"||!a.pid)return;const r=g[a.pid]=g[a.pid]||{code:a.pid,best:-99,sum:0,n:0,pass:0,last:0};r.best=Math.max(r.best,a.score);r.sum+=a.score;r.n++;if(a.score>=EXAM.pass)r.pass++;r.last=Math.max(r.last,a.date);});
+function board(s){const g={};P.attempts.forEach(a=>{if(a.s!==s||a.mode!=="exam"||!a.pid||(a.min||EXAM.minutes)>EXAM.minutes)return;const r=g[a.pid]=g[a.pid]||{code:a.pid,best:-99,sum:0,n:0,pass:0,last:0};r.best=Math.max(r.best,a.score);r.sum+=a.score;r.n++;if(a.score>=EXAM.pass)r.pass++;r.last=Math.max(r.last,a.date);});
   return Object.values(g).sort((x,y)=>y.best-x.best||y.sum/y.n-x.sum/x.n||x.last-y.last);}
 /* ------------------------------------------------------------------ INVIO DEI RISULTATI ALL'ASSOCIAZIONE */
 const QKEY="sf-sim-queue-v1";
@@ -253,6 +253,13 @@ function ago(ts){const d=new Date(ts);return d.toLocaleDateString("it-IT",{day:"
 function qstat(id){return P.qs[id]||[0,0,0,0];} // [seen, wrong, right, lastTs]
 function recordAnswer(q,ok){const s=qstat(q.id).slice();s[0]++;if(ok===true)s[2]++;else if(ok===false)s[1]++;s[3]=Date.now();P.qs[q.id]=s;}
 function errorPool(s){return BY[s].filter(q=>{const st=qstat(q.id);return st[1]>0&&st[1]>=st[2];});}
+// simulazione con i soli errori: tutte le domande sbagliate almeno una volta, prima quelle sbagliate più spesso
+function everWrong(s){return BY[s].filter(q=>qstat(q.id)[1]>0);}
+function errSimItems(s){const L=shuffle(everWrong(s)).sort((a,b)=>{const x=qstat(a.id),y=qstat(b.id);return (y[1]-y[2])-(x[1]-x[2])||y[3]-x[3];});
+  const mc=L.filter(q=>q.t==="mc"),fi=L.filter(q=>q.t==="fill");let nm=Math.min(EXAM.mc,mc.length),nf=Math.min(EXAM.fill,fi.length);
+  const tot=Math.min(EXAM.mc+EXAM.fill,L.length);while(nm+nf<tot){if(nm<mc.length)nm++;else nf++;}
+  const byU=(a,b)=>a.u-b.u;return mc.slice(0,nm).sort(byU).concat(fi.slice(0,nf).sort(byU));}
+function errSimMin(n){return Math.max(5,Math.ceil(EXAM.minutes*n/(EXAM.mc+EXAM.fill)));}
 
 /* ------------------------------------------------------------------ question selection */
 function isCalc(q){return q.t==="fill"?typeof q.n==="number":/\d/.test(q.q);}
@@ -318,8 +325,10 @@ function homeHTML(){
   <div class="wrap stack">`;
   h+=acctHTML()+loginCardHTML();
   if(draft&&draft.items){h+=`<div class="confirm"><b>Hai una simulazione di ${esc(sname(draft.s))} lasciata a metà.</b><div class="row"><button class="btn primary" data-act="resume">Riprendi</button><button class="btn ghost" data-act="discard">Scarta</button></div></div>`;}
+  const dy=lsGet(YKEY);if(!(draft&&draft.items)&&dy&&dy.subs&&dy.idx<dy.subs.length){h+=`<div class="confirm"><b>Hai una simulazione stile esame in corso: manca ${dy.subs.length-dy.idx===1?"l'ultima prova":"ancora "+(dy.subs.length-dy.idx)+" prove"} (prossima: ${esc(sname(dy.subs[dy.idx]))}).</b><div class="row"><button class="btn primary" data-act="dayResume">Riprendi</button><button class="btn ghost" data-act="dayDiscard">Scarta</button></div></div>`;}
+  h+=dayCardHTML();
   h+=`<section class="subjects">`;
-  ORDER.forEach(s=>{const st=subjStats(s);const errs=errorPool(s).length;const mcN=BY[s].filter(q=>q.t==="mc").length,fN=BY[s].length-mcN;
+  ORDER.forEach(s=>{const st=subjStats(s);const errs=errorPool(s).length;const ew=Math.min(EXAM.mc+EXAM.fill,everWrong(s).length);const mcN=BY[s].filter(q=>q.t==="mc").length,fN=BY[s].length-mcN;
     const sp=st.at.slice(-16).map(a=>`<i class="${a.score>=EXAM.pass?"":"fail"}" style="height:${Math.max(6,Math.min(100,Math.max(0,a.score)/EXAM.max*100))}%" title="${fmt(a.score)}/31${a.hard?" (difficile)":""}"></i>`).join("");
     h+=`<article class="subj ${SUBJ[s].cls}">
       <div class="subj-side">${ICON[s]}<div><b>${BY[s].length}</b><br><small>domande</small></div></div>
@@ -337,6 +346,7 @@ function homeHTML(){
         <button class="btn" data-act="examHard" data-s="${s}">Simulazione difficile</button>
         <button class="btn" data-act="practice" data-s="${s}">Esercitazione per argomento</button>
         <button class="btn" data-act="errors" data-s="${s}" ${errs?"":"disabled"}>Ripasso errori${errs?` (${errs})`:""}</button>
+        <button class="btn" data-act="errSim" data-s="${s}" ${ew?"":"disabled"} title="Una prova a tempo, con le regole d'esame, fatta solo di domande che hai sbagliato">Simulazione solo errori${ew?` (${ew})`:""}</button>
       </div></div></article>`;});
   h+=`</section>`;
   h+=boardHTML();
@@ -346,7 +356,7 @@ function homeHTML(){
   if(view.confirmReset){h+=`<div class="confirm"><b>Cancellare tutto lo storico e le statistiche delle domande?</b><div class="row"><button class="btn danger" data-act="reset">Sì, azzera</button><button class="btn ghost" data-act="noreset">Annulla</button></div></div>`;}
   if(!hist.length){h+=`<p class="muted">Qui compariranno le tue simulazioni ed esercitazioni, con punteggio e data. Inizia da una delle tre materie.</p>`;}
   else{h+=`<div class="tbl-wrap"><table class="hist"><thead><tr><th>Data</th><th>Materia</th><th>Tipo</th><th>Punteggio</th><th>Esito</th><th>E / S / O</th></tr></thead><tbody>`;
-    hist.forEach(a=>{const isExam=a.mode==="exam";h+=`<tr><td class="mono">${ago(a.date)}</td><td><span class="tag ${SUBJ[a.s].cls}">${esc(sname(a.s))}</span></td><td>${isExam?(a.hard?"Simulazione difficile":"Simulazione"):"Esercitazione"}</td><td class="mono">${fmt(a.score)}${isExam?"/31":"/"+a.n}</td><td>${isExam?`<span class="pill ${a.score>=EXAM.pass?"ok":"bad"}">${verdict(a.score)}</span>`:`<span class="pill neutral">${Math.round(a.correct/a.n*100)}% esatte</span>`}</td><td class="mono">${a.correct} / ${a.wrong} / ${a.omitted}</td></tr>`;});
+    hist.forEach(a=>{const isExam=a.mode==="exam";h+=`<tr><td class="mono">${ago(a.date)}</td><td><span class="tag ${SUBJ[a.s].cls}">${esc(sname(a.s))}</span></td><td>${a.mode==="errsim"?"Simulazione solo errori":isExam?(a.day?"Stile esame":a.hard?"Simulazione difficile":"Simulazione"):"Esercitazione"}${a.min?` <small class="muted">· ${a.min} min</small>`:""}</td><td class="mono">${fmt(a.score)}${isExam?"/31":"/"+a.n}</td><td>${isExam?`<span class="pill ${a.score>=EXAM.pass?"ok":"bad"}">${verdict(a.score)}</span>`:`<span class="pill neutral">${Math.round(a.correct/a.n*100)}% esatte</span>`}</td><td class="mono">${a.correct} / ${a.wrong} / ${a.omitted}</td></tr>`;});
     h+=`</tbody></table></div>`;}
   h+=`</section>
   <footer><div class="foot-card"><div class="foot-brand"><img src="data:image/png;base64,/*__LOGO__*/" alt="">Associazione studentesca ALFARMA</div>
@@ -360,7 +370,7 @@ function homeHTML(){
 
 /* ------------------------------------------------------------------ EXAM */
 function startExam(s,items,mode,opts){
-  const ex={pid:mode==="exam"?ME:null,s,mode,items:items.map(q=>({id:q.id,ord:q.t==="mc"?optOrder(q):null,ans:null,flag:false})),cur:0,start:Date.now(),timed:mode==="exam",limit:EXAM.minutes*60*1000,submitted:false,confirm:false,opts:opts||{}};
+  opts=opts||{};const ex={pid:mode==="exam"&&!opts.errs?ME:null,s,mode,items:items.map(q=>({id:q.id,ord:q.t==="mc"?optOrder(q):null,ans:null,flag:false})),cur:0,start:Date.now(),timed:mode==="exam",limit:(opts.minutes||EXAM.minutes)*60*1000,submitted:false,confirm:false,opts};
   if(mode==="exam")lsSet(DKEY,ex);
   go({name:"exam",ex});}
 function examLeft(ex){return ex.limit-(Date.now()-ex.start);}
@@ -369,7 +379,7 @@ function examHTML(){
   const ex=view.ex;const it=ex.items[ex.cur];const q=QI[it.id];const n=ex.items.length;const answered=ex.items.filter(x=>x.ans!=null&&x.ans!=="").length;
   const isPractice=ex.mode!=="exam";const revealed=isPractice&&it.checked;
   let h=`<div class="topbar ${SUBJ[ex.s].cls}"><div class="topbar-in">
-    <div class="row"><span class="tag">${esc(sname(ex.s))}</span><span class="progress-txt">${isPractice?(ex.mode==="errors"?"Ripasso errori":"Esercitazione"):(ex.opts&&ex.opts.hard?"Simulazione difficile":"Simulazione")} · ${answered}/${n} risposte</span></div>
+    <div class="row"><span class="tag">${esc(sname(ex.s))}</span><span class="progress-txt">${isPractice?(ex.mode==="errors"?"Ripasso errori":"Esercitazione"):(ex.opts.errs?"Simulazione solo errori":ex.opts.day?`Prova ${ex.opts.day.idx+1} di ${ex.opts.day.subs.length}`:ex.opts.hard?"Simulazione difficile":"Simulazione")} · ${answered}/${n} risposte</span></div>
     <div class="row">${ex.timed?`<span class="timer" id="timer" aria-live="off">${fmtTime(examLeft(ex))}</span>`:""}
     <button class="btn ${isPractice?"":"primary"} small" data-act="askSubmit">${isPractice?"Termina":"Consegna"}</button></div></div></div>
   <div class="wrap stack ${SUBJ[ex.s].cls}">`;
@@ -407,20 +417,25 @@ function submitExam(){
   counted.forEach(it=>recordAnswer(QI[it.id],it.ok));
   const c=counted.filter(i=>i.ok===true).length,w=counted.filter(i=>i.ok===false).length,o=ex.items.length-c-w;
   const units={};ex.items.forEach(it=>{const u=QI[it.id].u;units[u]=units[u]||[0,0];units[u][1]++;if(it.ok===true)units[u][0]++;});
-  const a={id:Date.now().toString(36)+Math.random().toString(36).slice(2,6),pid:ex.mode==="exam"?(ex.pid||null):null,s:ex.s,mode:ex.mode==="exam"?"exam":"practice",hard:!!(ex.opts&&ex.opts.hard),date:Date.now(),score:Math.round(scoreOf(c,w)*100)/100,correct:c,wrong:w,omitted:o,n:ex.items.length,dur:Date.now()-ex.start,units};
+  const O=ex.opts||{};const a={id:Date.now().toString(36)+Math.random().toString(36).slice(2,6),pid:ex.mode==="exam"&&!O.errs?(ex.pid||null):null,s:ex.s,mode:ex.mode==="exam"?(O.errs?"errsim":"exam"):"practice",hard:!!O.hard,date:Date.now(),score:Math.round(scoreOf(c,w)*100)/100,correct:c,wrong:w,omitted:o,n:ex.items.length,dur:Date.now()-ex.start,units};
+  if(ex.mode==="exam"&&Math.round(ex.limit/60000)!==EXAM.minutes)a.min=Math.round(ex.limit/60000);if(O.day)a.day=O.day.id;
   if(isPractice&&c+w===0){lsSet(DKEY,null);go({name:"home"});return;}
-  P.attempts.push(a);P.attempts=P.attempts.slice(-300);save();if(a.mode==="exam")enqueue(a,ex);if(ex.mode==="exam")lsSet(DKEY,null);
+  P.attempts.push(a);P.attempts=P.attempts.slice(-300);save();if(a.mode==="exam"&&(a.min||EXAM.minutes)<=EXAM.minutes)enqueue(a,ex);if(ex.mode==="exam")lsSet(DKEY,null);
+  if(O.day){const d=O.day;DAYRES[a.id]={ex,a};d.done=(d.done||[]).concat(a.id);d.idx++;
+    if(d.idx<d.subs.length){d.until=Date.now()+d.pause*60000;lsSet(YKEY,d);go({name:"pause",day:d});}
+    else{lsSet(YKEY,null);go({name:"daySum",day:d});}
+    return;}
   go({name:"result",ex,a,filter:"all"});}
 
 /* ------------------------------------------------------------------ RESULT */
 function ringHTML(score,max,isExam){const R=64,C=2*Math.PI*R;const f=Math.max(0,Math.min(1,score/max));const thr=EXAM.pass/EXAM.max;
   return `<div class="ring"><svg viewBox="0 0 150 150"><circle class="track" cx="75" cy="75" r="${R}" stroke-width="14" fill="none"/><circle class="val" cx="75" cy="75" r="${R}" stroke-width="14" fill="none" stroke-linecap="round" stroke-dasharray="${C}" stroke-dashoffset="${C*(1-f)}"/>${isExam?`<line class="thr" x1="${75+R-11}" y1="75" x2="${75+R+11}" y2="75" stroke-width="3" transform="rotate(${thr*360} 75 75)"/>`:""}</svg><div class="ring-txt"><div class="bigscore">${fmt(score)}<small>su ${max}</small></div></div></div>`;}
 function resultHTML(){
-  const {ex,a}=view;const isExam=a.mode==="exam";const s=ex.s;
-  let h=`<div class="wrap stack ${SUBJ[s].cls}"><div><button class="btn ghost back" data-act="home">← Torna alle materie</button></div>
-  <section class="panel stack"><p class="eyebrow">${esc(SUBJ[s].name)} · ${isExam?(a.hard?"simulazione difficile":"simulazione d'esame"):"esercitazione"} · ${Math.round(a.dur/60000)} min</p>
+  const {ex,a}=view;const isExam=a.mode==="exam",isErr=a.mode==="errsim";const s=ex.s;
+  let h=`<div class="wrap stack ${SUBJ[s].cls}"><div class="row">${view.day?`<button class="btn ghost back" data-act="daySum">← Torna al riepilogo della prova</button>`:`<button class="btn ghost back" data-act="home">← Torna alle materie</button>`}</div>
+  <section class="panel stack"><p class="eyebrow">${esc(SUBJ[s].name)} · ${isErr?"simulazione solo errori":isExam?(a.day?"simulazione stile esame":a.hard?"simulazione difficile":"simulazione d'esame"):"esercitazione"} · ${Math.round(a.dur/60000)} min${a.min?` (tempo impostato: ${a.min} min)`:""}</p>
   <div class="score-head">${ringHTML(a.score,isExam?EXAM.max:a.n,isExam)}
-  <div class="stack" style="gap:6px">${isExam?`<p class="verdict ${a.score>=EXAM.pass?"ok":"bad"}">${verdict(a.score)}</p><p class="muted">${a.score>=EXAM.pass?"Sopra la soglia di 18.":`Ti mancano ${fmt(EXAM.pass-a.score)} punti per arrivare a 18.`} Punteggio = esatte × 1 − errate × 0,1.</p>`:`<p class="verdict">${a.correct+a.wrong?Math.round(a.correct/(a.correct+a.wrong)*100):0}% di risposte esatte</p><p class="muted">Calcolato sulle domande a cui hai risposto. Il punteggio usa le regole d'esame.</p>`}</div></div>
+  <div class="stack" style="gap:6px">${isErr?`<p class="verdict">${pct(a.correct,a.n)}% di domande ora esatte</p><p class="muted">${a.correct} delle ${a.n} domande che avevi sbagliato in passato ora sono giuste. Punteggio con le regole d'esame: ${fmt(a.score)} su ${a.n}.</p>`:isExam?`<p class="verdict ${a.score>=EXAM.pass?"ok":"bad"}">${verdict(a.score)}</p><p class="muted">${a.score>=EXAM.pass?"Sopra la soglia di 18.":`Ti mancano ${fmt(EXAM.pass-a.score)} punti per arrivare a 18.`} Punteggio = esatte × 1 − errate × 0,1.</p>`:`<p class="verdict">${a.correct+a.wrong?Math.round(a.correct/(a.correct+a.wrong)*100):0}% di risposte esatte</p><p class="muted">Calcolato sulle domande a cui hai risposto. Il punteggio usa le regole d'esame.</p>`}</div></div>
   ${isExam&&a.pid?(()=>{const B=board(s);const i=B.findIndex(r=>r.code===a.pid);return `<p class="rankline">Codice <b class="mono">${esc(a.pid)}</b> · ${i+1}° su ${B.length} in graduatoria di ${esc(sname(s))}</p>`;})():""}
   <div class="counts"><div><b style="color:var(--ok)">${a.correct}</b><span>esatte</span></div><div><b style="color:var(--bad)">${a.wrong}</b><span>errate</span></div><div><b>${a.omitted}</b><span>omesse</span></div></div></section>`;
   h+=`<section class="panel stack"><h3>Per argomento</h3><div class="bars">`;
@@ -436,9 +451,9 @@ function resultHTML(){
     let your,right;
     if(q.t==="mc"){const L=oi=>LET[it.ord.indexOf(oi)];your=it.ans==null?"<i>nessuna</i>":`<b>${L(it.ans)})</b> ${esc(q.o[it.ans])}`;right=`<b>${L(0)})</b> ${esc(q.o[0])}`;}
     else{your=it.ans==null?"<i>nessuna</i>":`<b>${esc(it.ans)}</b>`;right=`<b>${esc(q.c[0])}</b>`;}
-    h+=`<article class="review-item ${st}"><div class="qmeta"><span class="eyebrow">${i+1} · ${esc(SUBJ[s].units[q.u])}</span><span class="pill ${st==="ok"?"ok":st==="bad"?"bad":"neutral"}">${st==="ok"?"+1":st==="bad"?(isExam?"−0,1":"errata"):"0"}</span></div>
+    h+=`<article class="review-item ${st}"><div class="qmeta"><span class="eyebrow">${i+1} · ${esc(SUBJ[s].units[q.u])}</span><span class="pill ${st==="ok"?"ok":st==="bad"?"bad":"neutral"}">${st==="ok"?"+1":st==="bad"?(isExam||isErr?"−0,1":"errata"):"0"}</span></div>
       <p>${esc(q.q)}</p><p class="ans-line">La tua risposta: ${your}</p>${st!=="ok"?`<p class="ans-line">Risposta corretta: ${right}</p>`:""}${st==="ok"&&it.how==="typo"?`<p class="ans-line">Accettata nonostante un errore di battitura: si scrive ${right}</p>`:""}<div class="explain">${esc(q.e)}${exclHTML(q)}</div></article>`;});
-  h+=`</section><div class="row"><button class="btn primary" data-act="${isExam?(a.hard?"examHard":"exam"):"practice"}" data-s="${s}">${isExam?(a.hard?"Nuova simulazione difficile":"Nuova simulazione"):"Nuova esercitazione"}</button><button class="btn" data-act="home">Torna alle materie</button></div></div>`;
+  h+=`</section><div class="row">${view.day?`<button class="btn primary" data-act="daySum">Torna al riepilogo della prova</button>`:isErr?`<button class="btn primary" data-act="errSim" data-s="${s}" ${everWrong(s).length?"":"disabled"}>Nuova simulazione solo errori</button>`:`<button class="btn primary" data-act="${isExam?(a.hard?"examHard":"exam"):"practice"}" data-s="${s}">${isExam?(a.hard?"Nuova simulazione difficile":"Nuova simulazione"):"Nuova esercitazione"}</button>`}<button class="btn" data-act="home">Torna alle materie</button></div></div>`;
   return h;}
 
 
@@ -446,7 +461,7 @@ function resultHTML(){
 function topicHist(id){let r=0,w=0,n=0;BY[TP[id].s].forEach(q=>{if(q.tp!==id)return;n++;const st=qstat(q.id);r+=st[2];w+=st[1];});return {r,w,n};}
 const pct=(a,b)=>b?Math.round(a/b*100):0;
 function planHTML(ex,a){
-  const s=ex.s,isExam=a.mode==="exam";
+  const s=ex.s,isExam=a.mode!=="practice";
   const T={};const typ={mc:[0,0],fill:[0,0]};let calcBad=0,allBad=0;
   ex.items.forEach((it,i)=>{const q=QI[it.id];const answered=it.ok!==null;
     if(!isExam&&!answered&&!it.checked)return;
@@ -534,13 +549,50 @@ function practiceHTML(){
   return h;}
 
 /* ------------------------------------------------------------------ RENDER + EVENTS */
+/* ------------------------------------------------------------------ SIMULAZIONE STILE ESAME */
+const DAYRES={};
+function dayPrefs(){const p=lsGet(PKEY)||{};return {subs:Array.isArray(p.subs)&&p.subs.length?p.subs.filter(x=>SUBJ[x]):ORDER.slice(),min:p.min>=10&&p.min<=90?p.min:EXAM.minutes,pause:p.pause>=0&&p.pause<=30?p.pause:10};}
+function readDayForm(){const subs=ORDER.filter(x=>{const c=document.getElementById("d-s-"+x);return c&&c.checked;});if(!subs.length)return null;
+  return {subs,min:+$("#d-min").value,pause:+$("#d-pause").value};}
+function dayRuleNote(){const el=document.getElementById("d-note");const m=document.getElementById("d-min");if(!el||!m)return;
+  el.textContent=+m.value>EXAM.minutes?`Con più di ${EXAM.minutes} minuti le prove restano nel tuo storico ma non entrano in graduatoria.`:+m.value<EXAM.minutes?"Meno tempo dell'esame vero: un buon allenamento per la velocità.":"Stesso tempo dell'esame vero.";}
+function dayCardHTML(){return `<section class="panel day-card"><div><p class="eyebrow">Novità</p><h2>Simulazione stile esame</h2><p class="muted">Le tre prove una dopo l'altra, come il giorno dell'esame: ${EXAM.mc+EXAM.fill} domande e ${EXAM.minutes} minuti per materia, con una pausa tra una prova e l'altra. Tempo e pausa li scegli tu.</p></div><div><button class="btn primary" data-act="daySetup">Prepara la simulazione</button></div></section>`;}
+function daySetupHTML(){const p=view.prefs;
+  return `<div class="wrap stack"><div><button class="btn ghost back" data-act="home">← Torna alle materie</button></div>
+  <section class="panel stack"><div><p class="eyebrow">Simulazione stile esame</p><h2>Prepara la tua prova</h2><p class="muted">Ogni prova ha ${EXAM.mc} domande a risposta multipla e ${EXAM.fill} a completamento, con il punteggio dell'esame (+1, −0,1, 0). Le correzioni le vedi alla fine, dopo l'ultima prova.</p></div>
+  <fieldset class="day-f"><legend>Prove, nell'ordine</legend><div class="day-subs">${ORDER.map((x,i)=>`<label class="unit-opt ${SUBJ[x].cls}"><input type="checkbox" id="d-s-${x}" ${p.subs.includes(x)?"checked":""}><span><b>${esc(SUBJ[x].name)}</b></span></label>`).join("")}</div></fieldset>
+  <div class="day-range"><label for="d-min">Tempo per prova</label><output id="d-min-v">${p.min} min</output><input type="range" id="d-min" min="10" max="90" step="5" value="${p.min}"></div>
+  <p class="muted small" id="d-note"></p>
+  <div class="day-range"><label for="d-pause">Pausa tra le prove</label><output id="d-pause-v">${p.pause?p.pause+" min":"nessuna"}</output><input type="range" id="d-pause" min="0" max="30" step="5" value="${p.pause}"></div>
+  <p class="muted small">Durante la pausa puoi sempre iniziare prima la prova successiva.</p>
+  <div class="row"><button class="btn primary" data-act="dayStart">Inizia la prima prova</button></div></section></div>`;}
+function startDayExam(d){const s=d.subs[d.idx];lsSet(DKEY,null);startExam(s,buildExam(s),"exam",{day:d,minutes:d.min});}
+function dayNext(){const d=view.day;if(!d||d.idx>=d.subs.length)return;lsSet(YKEY,d);startDayExam(d);}
+function dayDoneRows(d){return (d.done||[]).map(id=>P.attempts.find(a=>a.id===id)).filter(Boolean);}
+function pauseHTML(){const d=view.day;const nx=d.subs[d.idx];const done=dayDoneRows(d);
+  let h=`<div class="wrap stack ${SUBJ[nx].cls}"><section class="panel stack pause-card"><p class="eyebrow">Simulazione stile esame · prova ${d.idx+1} di ${d.subs.length}</p>`;
+  const live=d.pause>0&&d.until>Date.now();h+=live?`<h2>Pausa</h2><div class="pause-timer mono" id="ptimer" aria-live="off">${fmtTime(d.until-Date.now())}</div><p class="muted">Alla fine della pausa la prova di <b>${esc(SUBJ[nx].name)}</b> parte da sola (${d.min} min).</p>`:`<h2>Prossima prova: ${esc(SUBJ[nx].name)}</h2><p class="muted">${EXAM.mc+EXAM.fill} domande, ${d.min} minuti.</p>`;
+  h+=`<div class="row"><button class="btn primary" data-act="dayNext">${live?"Inizia subito":"Inizia la prova"}</button><button class="btn ghost" data-act="dayQuit">Interrompi la simulazione</button></div>`;
+  if(view.dayQuitAsk)h+=`<div class="confirm"><b>Interrompere la simulazione stile esame?</b><p>Le prove già consegnate restano nel tuo storico.</p><div class="row"><button class="btn danger" data-act="dayQuit">Interrompi</button><button class="btn ghost" data-act="dayQuitNo">Continua</button></div></div>`;
+  if(done.length)h+=`<p class="muted small">Prove consegnate: ${done.map(a=>esc(sname(a.s))).join(", ")}. I punteggi li vedi alla fine, come all'esame.</p>`;
+  return h+`</section></div>`;}
+function daySumHTML(){const d=view.day;const rows=dayDoneRows(d);const ok=rows.filter(a=>a.score>=EXAM.pass).length;
+  let h=`<div class="wrap stack"><div><button class="btn ghost back" data-act="home">← Torna alle materie</button></div>
+  <section class="panel stack"><p class="eyebrow">Simulazione stile esame · ${d.min} min per prova${d.pause?` · pausa ${d.pause} min`:""}</p><h2>${ok===rows.length?"Tutte le prove superate":`${ok} prov${ok===1?"a superata":"e superate"} su ${rows.length}`}</h2>
+  <div class="day-sum">${rows.map(a=>`<article class="day-row ${SUBJ[a.s].cls}"><div><b>${esc(SUBJ[a.s].name)}</b><small class="muted">${a.correct} esatte · ${a.wrong} errate · ${a.omitted} omesse · ${Math.round(a.dur/60000)} min</small></div><div class="day-score"><span class="mono">${fmt(a.score)}<small>/31</small></span><span class="pill ${a.score>=EXAM.pass?"ok":"bad"}">${verdict(a.score)}</span></div>${DAYRES[a.id]?`<button class="btn small" data-act="dayRes" data-id="${a.id}">Vedi correzione</button>`:""}</article>`).join("")}</div>
+  ${d.min>EXAM.minutes?`<p class="muted small">Con ${d.min} minuti per prova queste simulazioni non entrano in graduatoria.</p>`:""}
+  <div class="row"><button class="btn primary" data-act="daySetup">Nuova simulazione stile esame</button><button class="btn" data-act="home">Torna alle materie</button></div></section></div>`;
+  return h;}
 function render(){const app=$("#app");if(view.name==="home")loadGB();
   if(view.name==="home"){app.innerHTML=homeHTML();drawGBtn();}
   else if(view.name==="exam"){app.innerHTML=examHTML();if(view.ex.timed&&!view.ex.submitted){clearInterval(tick);tick=setInterval(()=>{const left=examLeft(view.ex);const t=$("#timer");if(t){t.textContent=fmtTime(left);t.classList.toggle("low",left<5*60000);}if(left<=0){clearInterval(tick);submitExam();}},500);}
     const inp=document.querySelector(".fill input:not([disabled])");if(inp){inp.addEventListener("input",()=>{readFill();persistDraft();updateCounter();});inp.addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();act(view.ex.mode==="exam"||view.ex.items[view.ex.cur].checked?"next":"check");}});}}
   else if(view.name==="result")app.innerHTML=resultHTML();
   else if(view.name==="practice")app.innerHTML=practiceHTML();
-  else if(view.name==="gaps")app.innerHTML=gapsHTML();}
+  else if(view.name==="gaps")app.innerHTML=gapsHTML();
+  else if(view.name==="daySetup"){app.innerHTML=daySetupHTML();dayRuleNote();document.querySelectorAll("input[type=range]").forEach(r=>r.addEventListener("input",()=>{const o=document.getElementById(r.id+"-v");if(o)o.textContent=r.id==="d-pause"&&+r.value===0?"nessuna":r.value+" min";dayRuleNote();}));}
+  else if(view.name==="pause"){app.innerHTML=pauseHTML();const d=view.day;if(d.pause>0&&d.until>Date.now()){clearInterval(tick);tick=setInterval(()=>{const left=d.until-Date.now();const t=$("#ptimer");if(t)t.textContent=fmtTime(left);if(left<=0){clearInterval(tick);dayNext();}},500);}}
+  else if(view.name==="daySum")app.innerHTML=daySumHTML();}
 function updateCounter(){const ex=view.ex;const el=document.querySelector(".progress-txt");if(!el)return;const n=ex.items.length,answered=ex.items.filter(x=>x.ans!=null&&x.ans!=="").length;el.textContent=el.textContent.replace(/\d+\/\d+ risposte/,answered+"/"+n+" risposte");const cell=document.querySelector(`.nav-cell[data-i="${ex.cur}"]`);if(cell&&ex.mode==="exam")cell.classList.toggle("ans",ex.items[ex.cur].ans!=null);}
 
 function act(a,d){d=d||{};
@@ -548,7 +600,8 @@ function act(a,d){d=d||{};
   switch(a){
   case "home":go({name:"home"});break;
   case "exam":case "examHard":view.who={next:a,s:d.s,step:ME&&P.pr[ME]?"confirm":(Object.keys(P.pr).length?"pick":"new")};renderWho();break;
-  case "whoGo":{const w=view.who;if(!w)break;view.who=null;renderWho();lsSet(DKEY,null);if(w.next==="examHard")startExam(w.s,buildExam(w.s,true),"exam",{hard:true});else startExam(w.s,buildExam(w.s),"exam");break;}
+  case "whoGo":{const w=view.who;if(!w)break;view.who=null;renderWho();lsSet(DKEY,null);if(w.next==="day"){const pr=w.prefs;const dd={id:Date.now().toString(36),subs:pr.subs,min:pr.min,pause:pr.pause,idx:0,done:[]};lsSet(YKEY,dd);startDayExam(dd);}
+    else if(w.next==="examHard")startExam(w.s,buildExam(w.s,true),"exam",{hard:true});else startExam(w.s,buildExam(w.s),"exam");break;}
   case "whoPick":setMe(d.code);view.who.step="confirm";renderWho();break;
   case "whoNew":view.who.step="new";renderWho();break;
   case "whoOther":view.who.step=Object.keys(P.pr).length>1?"pick":"new";renderWho();break;
@@ -569,10 +622,20 @@ function act(a,d){d=d||{};
   case "lbScope":view.lbScope=d.v;render();break;
   case "lb":view.lb=d.s;render();break;
   case "resume":{const dr=lsGet(DKEY);if(dr){go({name:"exam",ex:dr});}break;}
-  case "discard":lsSet(DKEY,null);render();break;
+  case "discard":{const dr=lsGet(DKEY);if(dr&&dr.opts&&dr.opts.day)lsSet(YKEY,null);lsSet(DKEY,null);render();break;}
   case "practice":go({name:"practice",s:d.s,units:Object.keys(SUBJ[d.s].units)});break;
   case "practiceUnit":go({name:"practice",s:d.s,units:[String(d.u)]});break;
   case "practiceTopic":{const items=pick(BY[d.s].filter(q=>q.tp===d.tp),15).sort((x,y)=>x.t===y.t?0:(x.t==="mc"?-1:1));if(items.length)startExam(d.s,items,"practice");break;}
+  case "errSim":{const items=errSimItems(d.s);if(items.length){lsSet(DKEY,null);startExam(d.s,items,"exam",{errs:true,minutes:errSimMin(items.length)});}break;}
+  case "daySetup":go({name:"daySetup",prefs:dayPrefs()});break;
+  case "dayStart":{const pr=readDayForm();if(!pr)break;lsSet(PKEY,pr);view.who={next:"day",prefs:pr,step:ME&&P.pr[ME]?"confirm":(Object.keys(P.pr).length?"pick":"new")};renderWho();break;}
+  case "dayNext":clearInterval(tick);dayNext();break;
+  case "dayResume":{const dd=lsGet(YKEY);if(dd)go({name:"pause",day:dd});break;}
+  case "dayDiscard":lsSet(YKEY,null);render();break;
+  case "dayQuit":if(!view.dayQuitAsk){view.dayQuitAsk=true;render();break;}lsSet(YKEY,null);go({name:"home"});break;
+  case "dayQuitNo":view.dayQuitAsk=false;render();break;
+  case "daySum":go({name:"daySum",day:view.day});break;
+  case "dayRes":{const r=DAYRES[d.id];if(r)go({name:"result",ex:r.ex,a:r.a,filter:"all",day:view.day});break;}
   case "errors":{const pool=shuffle(errorPool(d.s)).slice(0,20);if(pool.length)startExam(d.s,pool,"errors");break;}
   case "utoggle":{const u=d.u;const i=view.units.indexOf(u);if(i>=0)view.units.splice(i,1);else view.units.push(u);render();break;}
   case "uall":view.units=Object.keys(SUBJ[view.s].units);render();break;
@@ -591,7 +654,7 @@ function act(a,d){d=d||{};
   case "cancelSubmit":ex.confirm=false;render();break;
   case "submit":submitExam();break;
   case "quit":if(ex.mode==="exam"){if(!ex.quitAsk){ex.quitAsk=true;ex.confirm=false;render();showQuit();break;}}lsSet(DKEY,null);go({name:"home"});break;
-  case "quitYes":lsSet(DKEY,null);go({name:"home"});break;
+  case "quitYes":if(ex&&ex.opts&&ex.opts.day)lsSet(YKEY,null);lsSet(DKEY,null);go({name:"home"});break;
   case "filter":view.filter=d.f;render();break;
   case "askreset":view.confirmReset=true;render();break;
   case "noreset":view.confirmReset=false;render();break;

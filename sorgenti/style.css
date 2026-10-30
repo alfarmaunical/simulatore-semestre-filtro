@@ -292,3 +292,19 @@ details.topic-card.gap[open]>summary{margin-bottom:12px}
 .page-head .lead-p{color:rgba(255,255,255,.88);margin:0;max-width:70ch}
 .wrap.gaps-all .page-head{--sc:var(--accent)}
 .seg.scroll{flex-wrap:nowrap;overflow-x:auto;max-width:100%}.seg.scroll button{flex:none}
+/* simulazione stile esame */
+.day-card{display:flex;gap:16px;align-items:center;justify-content:space-between;flex-wrap:wrap;border-left:5px solid var(--accent)}
+.day-card h2{margin:2px 0 4px}.day-card p{margin:0;max-width:62ch}
+.day-f{border:0;padding:0;margin:0;display:grid;gap:8px}.day-f legend{font-weight:700;margin-bottom:8px}
+.day-subs{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:8px}
+.day-range{display:grid;grid-template-columns:1fr auto;gap:6px 12px;align-items:center}
+.day-range label{font-weight:700}.day-range output{font-family:"JetBrains Mono",monospace;font-weight:700}
+.day-range input{grid-column:1/-1;width:100%;accent-color:var(--accent)}
+.pause-card{text-align:center;justify-items:center}
+.pause-timer{font-size:clamp(48px,14vw,88px);font-weight:700;line-height:1;color:var(--sc,var(--accent))}
+.day-sum{display:grid;gap:10px}
+.day-row{display:grid;grid-template-columns:1fr auto;gap:8px 14px;align-items:center;border:1px solid var(--line);border-left:5px solid var(--sc);border-radius:16px;padding:12px 14px}
+.day-row>div:first-child{display:grid;gap:2px}
+.day-score{display:flex;gap:10px;align-items:center}.day-score .mono{font-size:22px;font-weight:700}.day-score small{font-size:13px;opacity:.7}
+.day-row .btn{grid-column:1/-1;justify-self:start}
+.pause-card .row{justify-content:center}
